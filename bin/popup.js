@@ -12,6 +12,7 @@ const { Editor } = require("../lib/editor");
 const { style, tint, pad, truncate, shortenPath, displayWidth } = require("../lib/ui");
 const { compose } = require("../lib/brief");
 const { labels, title, known, group, partialTag } = require("../lib/labels");
+const when = require("../lib/when");
 const { catalog } = require("../lib/agents");
 const { runningAgents, matches } = require("../lib/running");
 const { spawnDetached } = require("../lib/herdr");
@@ -88,7 +89,7 @@ const state = {
   ticked: new Set(),
   agent: Math.max(0, chips.findIndex((a) => a.kind === prefs.kind)),
   destination: Math.max(0, DESTINATIONS.findIndex((d) => d.id === prefs.destination)),
-  sheet: null, // { type: "launch" } or { type: "running", agents, index, filter }
+  sheet: null, // { type: "launch" }, { type: "when", input } or { type: "running", agents, index, filter }
   confirmDelete: false,
   notice: draft ? "restored your draft · ctrl+u clears it" : selection ? "started from your selection" : null,
 };
@@ -97,7 +98,13 @@ function reload() {
   const all = store.readAll().sort((a, b) => b.created.localeCompare(a.created));
   state.counts = TABS.map((tab) => all.filter(tab.show).length);
   state.labels = known(all);
-  state.groups = group(all.filter(TABS[state.tab].show));
+  // Open notes with a date sit above the labels, soonest first.
+  const shown = all.filter(TABS[state.tab].show);
+  const dated = shown.filter((n) => n.due && !n.done).sort((a, b) => a.due.localeCompare(b.due));
+  state.groups = [
+    ...(dated.length ? [{ name: "upcoming", upcoming: true, notes: dated }] : []),
+    ...group(shown.filter((n) => !dated.includes(n))),
+  ];
   state.notes = state.groups.flatMap((g) => g.notes);
   const ids = new Set(state.notes.map((n) => n.id));
   for (const id of state.ticked) if (!ids.has(id)) state.ticked.delete(id);
@@ -172,6 +179,11 @@ function wrapWords(text, width) {
   return out;
 }
 
+function dueText(iso, text) {
+  const level = when.urgency(iso);
+  return level === "overdue" ? style.danger(text) : level === "today" ? style.warn(text) : style.accent(text);
+}
+
 const tags = (names) => names.map((name) => tint(`#${name}`)).join(" ");
 const colourTags = (line) => line.replace(/(^|\s)(#[\p{L}\p{N}][\p{L}\p{N}_-]*)/gu, (_, gap, tag) => gap + tint(tag));
 
@@ -219,15 +231,17 @@ function listLines(width) {
   let selectedRow = 0;
   for (const g of state.groups) {
     if (rows.length) rows.push("");
-    const name = g.name === null ? style.dim("no label") : tint(g.name);
+    const name = g.upcoming ? style.bold("upcoming") : g.name === null ? style.dim("no label") : tint(g.name);
     rows.push(`${name} ${style.dim(`· ${g.notes.length}`)}`);
     for (const note of g.notes) {
       const selected = note === current();
       if (selected) selectedRow = rows.length;
       const marker = selected ? (state.focus === "list" ? style.accent("›") : style.dim("›")) : " ";
       const tick = state.ticked.has(note.id) ? style.accent("●") : " ";
-      const text = truncate(title(note.text), width - 3);
-      rows.push(`${marker}${tick} ${selected && state.focus === "list" ? style.bright(text) : text}`);
+      const date = g.upcoming ? when.short(note.due) : "";
+      const text = truncate(title(note.text), width - 3 - (date ? date.length + 1 : 0));
+      const head = `${marker}${tick} ${selected && state.focus === "list" ? style.bright(text) : text}`;
+      rows.push(date ? spread(head, dueText(note.due, date), width) : head);
     }
   }
   return { rows, selectedRow };
@@ -236,7 +250,9 @@ function listLines(width) {
 function previewLines(note, width) {
   if (!note) return [];
   const names = labels(note.text);
-  const out = [spread(names.length ? tags(names) : style.dim("no label"), style.dim(ago(note.created)), width), ""];
+  const out = [spread(names.length ? tags(names) : style.dim("no label"), style.dim(ago(note.created)), width)];
+  if (note.due && !note.done) out.push(dueText(note.due, `due ${when.long(note.due)}`));
+  out.push("");
   for (const line of wrapWords(note.text, width)) out.push(colourTags(line));
   out.push("");
 
@@ -272,8 +288,9 @@ function hintRow() {
   return keys([
     ["⏎", "edit"],
     ["space", "tick"],
-    ["ctrl+n", "new agent"],
+    ["ctrl+n", "agent"],
     ["ctrl+r", "send"],
+    ["ctrl+w", "when"],
     ["ctrl+x", current()?.done ? "reopen" : "done"],
     ["ctrl+d", "delete"],
     src.session && RESUME_ARGS[src.agent] && ["ctrl+o", "session"],
@@ -345,6 +362,59 @@ function onLaunchKey(chunk, key) {
   else if (key.name === "right" || key.name === "tab") state.agent = (state.agent + 1) % chips.length;
   else if (key.ctrl && key.name === "t") state.destination = (state.destination + 1) % DESTINATIONS.length;
   else if (key.name === "return") launch();
+}
+
+/* ---------- set a date ---------- */
+
+const WHEN_EXAMPLES = ["today 5pm", "tonight", "tomorrow", "fri 14:00", "next week", "in 2h", "in 3 days", "oct 12", "2026-10-12 9:30"];
+
+function whenBody(width, rows) {
+  const lines = new Array(rows).fill("");
+  const notes = targets();
+  const subject = notes.length === 1 ? `"${truncate(title(notes[0].text), width - 20)}"` : plural(notes.length, "note");
+  lines[0] = `${style.bold("When is")} ${style.accent(subject)} ${style.bold("due?")}`;
+  const field = state.sheet.input.viewport(width - 2);
+  lines[2] = `${style.accent("› ")}${field.text}${field.text ? "" : style.dim("e.g. tomorrow 9am")}`;
+
+  const text = state.sheet.input.text;
+  const date = when.parse(text);
+  const existing = notes.length === 1 && notes[0].due;
+  if (date) lines[3] = `  ${dueText(date.toISOString(), `→ ${when.long(date.toISOString())}`)}`;
+  else if (text.trim()) lines[3] = style.dim("  → not a date yet");
+  else if (existing) lines[3] = style.dim(`  now due ${when.long(existing)} · ⏎ on an empty line clears it`);
+
+  lines[5] = style.dim("  try:");
+  const rowsOfExamples = [[]];
+  for (const example of WHEN_EXAMPLES) {
+    const row = rowsOfExamples[rowsOfExamples.length - 1];
+    if (row.length && displayWidth([...row, example].join(" · ")) > width - 4) rowsOfExamples.push([example]);
+    else row.push(example);
+  }
+  rowsOfExamples.forEach((row, i) => { lines[6 + i] = `  ${row.join(DOT)}`; });
+
+  lines[rows - 2] = style.dim("─".repeat(width));
+  lines[rows - 1] = state.notice ? style.warn(state.notice) : keys([["⏎", text.trim() ? "set" : existing ? "clear date" : "set"], ["esc", "back"]]);
+  return { lines, caret: { row: 2, col: 2 + field.col } };
+}
+
+function onWhenKey(chunk, key) {
+  const input = state.sheet.input;
+  if (key.name !== "return") return editKey(input, chunk, key);
+
+  const text = input.text.trim();
+  const date = text ? when.parse(text) : null;
+  if (text && !date) {
+    state.notice = `"${text}" is not a date I can read`;
+    return;
+  }
+  const notes = targets();
+  const due = date ? date.toISOString() : null;
+  for (const note of notes) store.setDue(note.id, due);
+  state.sheet = null;
+  state.ticked.clear();
+  reload();
+  state.index = Math.max(0, state.notes.findIndex((n) => n.id === notes[0].id));
+  state.notice = due ? `due ${when.short(due)}: ${plural(notes.length, "note")}` : `date cleared: ${plural(notes.length, "note")}`;
 }
 
 /* ---------- send to a running agent ---------- */
@@ -507,6 +577,9 @@ function onListKey(chunk, key) {
     case key.ctrl && key.name === "n":
       state.sheet = { type: "launch" };
       break;
+    case key.ctrl && key.name === "w":
+      state.sheet = { type: "when", input: new Editor("") };
+      break;
     case key.ctrl && key.name === "r":
       openRunning();
       break;
@@ -578,6 +651,7 @@ function dispatch(request) {
 
 const SHEETS = {
   launch: { body: launchBody, key: onLaunchKey },
+  when: { body: whenBody, key: onWhenKey },
   running: { body: runningBody, key: onRunningKey },
 };
 
@@ -610,6 +684,10 @@ function onEscape() {
 function onPaste(text) {
   if (state.sheet?.type === "running") {
     state.sheet.filter += text.replace(/\n/g, " ");
+    return;
+  }
+  if (state.sheet?.type === "when") {
+    state.sheet.input.insert(text.replace(/\n/g, " "));
     return;
   }
   if (state.sheet) return;
