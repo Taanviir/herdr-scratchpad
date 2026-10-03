@@ -121,7 +121,6 @@ function cmdShow(rest) {
     ["branch", src.branch],
     ["agent", src.agent && `${src.agent}${src.session ? ` session ${src.session}` : ""}`],
     ["from", src.title],
-    ["sent", (note.sent ?? []).map((s) => `${s.at} → ${s.agent ?? s.pane}`).join("; ")],
   ];
   for (const [label, value] of rows) if (value) console.log(`${label.padEnd(8)} ${value}`);
 }

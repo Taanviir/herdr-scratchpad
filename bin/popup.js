@@ -13,21 +13,12 @@ const { style, tint, pad, truncate, shortenPath, displayWidth } = require("../li
 const { compose } = require("../lib/brief");
 const { labels, title, known, group, partialTag } = require("../lib/labels");
 const when = require("../lib/when");
-const { catalog } = require("../lib/agents");
-const { runningAgents, matches } = require("../lib/running");
-const { spawnDetached } = require("../lib/herdr");
+const { run, spawnDetached } = require("../lib/herdr");
 const { readClipboard } = require("../lib/clipboard");
 const { STATE_DIR, start, isNewline, isPrintable, editKey } = require("../lib/term");
 
 const LAUNCHER = path.join(__dirname, "launch.js");
-const PREFS = path.join(STATE_DIR, "prefs.json");
 const DRAFT = path.join(STATE_DIR, "draft.txt");
-
-const DESTINATIONS = [
-  { id: "tab", label: "a new tab" },
-  { id: "right", label: "a split on the right" },
-  { id: "down", label: "a split below" },
-];
 
 // Claude Code and Codex are the agents that take a session id on the command line.
 const RESUME_ARGS = {
@@ -36,7 +27,6 @@ const RESUME_ARGS = {
 };
 
 const MAX_INPUT_ROWS = 3;
-const MIN_CHIPS = 5;
 const SUGGESTIONS = 6;
 
 const originPane = process.env.SCRATCHPAD_PANE;
@@ -49,14 +39,6 @@ const TABS = [
   { id: "done", label: "Done", show: (n) => Boolean(n.done) },
 ].filter(Boolean);
 
-function readJson(file, fallback) {
-  try {
-    return JSON.parse(fs.readFileSync(file, "utf8"));
-  } catch {
-    return fallback;
-  }
-}
-
 function writeFile(file, text) {
   try {
     fs.mkdirSync(STATE_DIR, { recursive: true });
@@ -64,11 +46,6 @@ function writeFile(file, text) {
     else fs.rmSync(file, { force: true });
   } catch { /* a preference or a draft is not worth failing over */ }
 }
-
-const prefs = readJson(PREFS, {});
-const agents = catalog();
-const installed = agents.filter((a) => a.installed);
-const chips = installed.length >= MIN_CHIPS ? installed : agents.slice(0, MIN_CHIPS);
 
 let draft = "";
 try { draft = fs.readFileSync(DRAFT, "utf8"); } catch { /* none */ }
@@ -87,9 +64,7 @@ const state = {
   labels: [], // every label in use, for completing a half-typed one
   index: 0,
   ticked: new Set(),
-  agent: Math.max(0, chips.findIndex((a) => a.kind === prefs.kind)),
-  destination: Math.max(0, DESTINATIONS.findIndex((d) => d.id === prefs.destination)),
-  sheet: null, // { type: "launch" }, { type: "when", input } or { type: "running", agents, index, filter }
+  sheet: null, // { type: "when", input } while setting a date
   confirmDelete: false,
   notice: draft ? "restored your draft · ctrl+u clears it" : selection ? "started from your selection" : null,
 };
@@ -260,7 +235,6 @@ function previewLines(note, width) {
   const from = [src.agent, src.title && `"${src.title}"`, src.branch].filter(Boolean).join(" · ");
   out.push(style.dim(from ? `from ${from}` : "written outside an agent"));
   if (TABS[state.tab].id !== "here") out.push(style.dim(`in ${note.folders?.[0] ? shortenPath(note.folders[0], width - 3) : "no folder"}`));
-  for (const sent of note.sent ?? []) out.push(style.dim(`sent to ${sent.agent ?? sent.pane} ${ago(sent.at)}`));
   if (note.done) out.push(style.ok(`done ${ago(note.done)}`));
   return out;
 }
@@ -288,8 +262,7 @@ function hintRow() {
   return keys([
     ["⏎", "edit"],
     ["space", "tick"],
-    ["ctrl+n", "agent"],
-    ["ctrl+r", "send"],
+    ["ctrl+n", "to an agent"],
     ["ctrl+w", "when"],
     ["ctrl+x", current()?.done ? "reopen" : "done"],
     ["ctrl+d", "delete"],
@@ -326,42 +299,6 @@ function mainBody(width, rows) {
     lines[top + i] = `${left} ${style.dim("│")} ${preview[i] ?? ""}`;
   }
   return { lines, caret: input.caret };
-}
-
-/* ---------- start an agent ---------- */
-
-function chipRow(width) {
-  const row = chips.map((item, i) => {
-    const label = i < 9 ? `${i + 1} ${item.kind}` : item.kind;
-    if (i === state.agent) return style.selected(` ${label} `);
-    return ` ${i < 9 ? style.dim(`${i + 1} `) : ""}${item.kind} `;
-  }).join(" ");
-  return spread(row, style.dim("1-9"), width);
-}
-
-function launchBody(width, rows) {
-  const lines = new Array(rows).fill("");
-  const notes = targets();
-  lines[0] = `${style.bold("Start an agent")} ${style.dim("with")} ${style.accent(plural(notes.length, "note"))}`;
-  lines[2] = chipRow(width);
-  lines[3] = `${style.dim("opens in")} ${DESTINATIONS[state.destination].label} ${style.dim("(ctrl+t)")}${DOT}${shortenPath(launchDirectory(notes), width - 40)}`;
-  lines[5] = style.dim(`─ the prompt it gets ${"─".repeat(Math.max(0, width - 21))}`);
-  const prompt = wrapWords(compose(notes), width - 2);
-  const room = rows - 9;
-  prompt.slice(0, room).forEach((line, i) => { lines[6 + i] = `  ${style.dim(line)}`; });
-  if (prompt.length > room) lines[6 + room] = style.dim("  …");
-  lines[rows - 2] = style.dim("─".repeat(width));
-  lines[rows - 1] = keys([["⏎", "start"], ["1-9", "agent"], ["ctrl+t", "where"], ["esc", "back"]]);
-  return { lines };
-}
-
-function onLaunchKey(chunk, key) {
-  const digit = /^\x1b?([1-9])$/.exec(chunk ?? "");
-  if (digit && Number(digit[1]) <= chips.length) state.agent = Number(digit[1]) - 1;
-  else if (key.name === "left") state.agent = (state.agent - 1 + chips.length) % chips.length;
-  else if (key.name === "right" || key.name === "tab") state.agent = (state.agent + 1) % chips.length;
-  else if (key.ctrl && key.name === "t") state.destination = (state.destination + 1) % DESTINATIONS.length;
-  else if (key.name === "return") launch();
 }
 
 /* ---------- set a date ---------- */
@@ -415,68 +352,6 @@ function onWhenKey(chunk, key) {
   reload();
   state.index = Math.max(0, state.notes.findIndex((n) => n.id === notes[0].id));
   state.notice = due ? `due ${when.short(due)}: ${plural(notes.length, "note")}` : `date cleared: ${plural(notes.length, "note")}`;
-}
-
-/* ---------- send to a running agent ---------- */
-
-function runningMatches() {
-  const { agents: list, filter } = state.sheet;
-  return filter ? list.filter((a) => matches(a, filter)) : list;
-}
-
-// Agents working in the notes' folder first, then running.js's order: the
-// ones waiting on you before the busy ones.
-function openRunning() {
-  const folder = launchDirectory(targets());
-  const near = (a) => a.cwd === folder || a.cwd.startsWith(`${folder}${path.sep}`);
-  const list = runningAgents().sort((a, b) => Number(near(b)) - Number(near(a)));
-  if (!list.length) {
-    state.notice = "no agents running · ctrl+n starts one";
-    return;
-  }
-  state.sheet = { type: "running", agents: list, index: 0, filter: "" };
-}
-
-function runningBody(width, rows) {
-  const lines = new Array(rows).fill("");
-  const { filter, index } = state.sheet;
-  const list = runningMatches();
-  lines[0] = `${style.bold("Send")} ${style.accent(plural(targets().length, "note"))} ${style.bold("to a running agent")}`;
-  lines[2] = `${style.accent("/")} ${filter}${filter ? "" : style.dim("type to filter")}`;
-  const room = rows - 6;
-  const first = Math.max(0, Math.min(index - room + 1, list.length - room));
-  for (let i = 0; i < room && first + i < list.length; i += 1) {
-    const agent = list[first + i];
-    const active = first + i === index;
-    const status = agent.status === "working" ? style.warn(agent.status) : agent.status === "blocked" ? style.dim(agent.status) : style.ok(agent.status);
-    const right = `${pad(status, 9)} ${pad(style.dim(shortenPath(agent.cwd, 26)), 26)}`;
-    const label = truncate(`${agent.kind} · ${agent.title}`, width - displayWidth(right) - 4);
-    lines[4 + i] = `${active ? style.accent("›") : " "} ${pad(active ? style.bright(label) : label, width - displayWidth(right) - 2)}${right}`;
-  }
-  if (!list.length) lines[4] = style.dim("  no running agents match");
-  lines[rows - 2] = style.dim("─".repeat(width));
-  lines[rows - 1] = state.notice ? style.warn(state.notice) : keys([["⏎", "send"], ["↑↓", "pick"], ["esc", "back"]]) + style.dim("   a busy agent gets it after its turn");
-  return { lines, caret: { row: 2, col: 2 + displayWidth(filter) } };
-}
-
-function onRunningKey(chunk, key) {
-  const sheet = state.sheet;
-  const list = runningMatches();
-  if (key.name === "up") sheet.index = Math.max(0, sheet.index - 1);
-  else if (key.name === "down") sheet.index = Math.min(list.length - 1, sheet.index + 1);
-  else if (key.name === "backspace") sheet.filter = sheet.filter.slice(0, -1);
-  else if (key.name === "return") {
-    const agent = list[sheet.index];
-    if (!agent) return;
-    if (agent.status === "blocked") {
-      state.notice = "that agent is waiting on a question; answer it first";
-      return;
-    }
-    dispatch({ type: "send", target: agent.target, title: agent.title, kind: agent.kind, notes: targets().map((n) => n.id) });
-  } else if (isPrintable(chunk, key)) {
-    sheet.filter += chunk;
-    sheet.index = 0;
-  }
 }
 
 /* ---------- keys on the main screen ---------- */
@@ -575,13 +450,10 @@ function onListKey(chunk, key) {
       state.confirmDelete = true;
       break;
     case key.ctrl && key.name === "n":
-      state.sheet = { type: "launch" };
+      handOff();
       break;
     case key.ctrl && key.name === "w":
       state.sheet = { type: "when", input: new Editor("") };
-      break;
-    case key.ctrl && key.name === "r":
-      openRunning();
       break;
     case key.ctrl && key.name === "o":
       resume(current());
@@ -613,12 +485,19 @@ function toggleDone(notes) {
 
 /* ---------- handing off ---------- */
 
-function launch() {
-  const kind = chips[state.agent].kind;
-  const destination = DESTINATIONS[state.destination].id;
-  writeFile(PREFS, JSON.stringify({ ...prefs, kind, destination }));
+// Quick Prompt already does the rest well: which agent, a tab, split or
+// worktree, presets, models, or a follow-up to one already running. The
+// notes go over as its prompt, ids included, so the agent can close them.
+const QUICK_PROMPT = "taanviir.quick-prompt";
+
+function handOff() {
+  const listed = run(["plugin", "list", "--plugin", QUICK_PROMPT, "--json"], { check: false, timeout: 1000 });
+  if (!listed.ok || !listed.result.plugins?.some((plugin) => plugin.enabled)) {
+    state.notice = "needs Quick Prompt: herdr plugin install Taanviir/herdr-quick-prompt";
+    return;
+  }
   const notes = targets();
-  dispatch({ type: "launch", kind, destination, cwd: launchDirectory(notes), workspace, pane: originPane, notes: notes.map((n) => n.id) });
+  dispatch({ type: "handoff", prompt: compose(notes), cwd: launchDirectory(notes), workspace, pane: originPane });
 }
 
 function resume(note) {
@@ -631,10 +510,8 @@ function resume(note) {
     type: "resume",
     kind: src.agent,
     args: RESUME_ARGS[src.agent](src.session),
-    destination: DESTINATIONS[state.destination].id,
     cwd: src.cwd ?? note.folders?.[0],
     workspace,
-    pane: originPane,
   });
 }
 
@@ -650,9 +527,7 @@ function dispatch(request) {
 }
 
 const SHEETS = {
-  launch: { body: launchBody, key: onLaunchKey },
   when: { body: whenBody, key: onWhenKey },
-  running: { body: runningBody, key: onRunningKey },
 };
 
 function onKey(chunk, key) {
@@ -682,10 +557,6 @@ function onEscape() {
 }
 
 function onPaste(text) {
-  if (state.sheet?.type === "running") {
-    state.sheet.filter += text.replace(/\n/g, " ");
-    return;
-  }
   if (state.sheet?.type === "when") {
     state.sheet.input.insert(text.replace(/\n/g, " "));
     return;

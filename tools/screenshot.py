@@ -45,16 +45,9 @@ COLOURS = {
     "34": "#89b4fa", "35": "#f5c2e7", "36": "#89dceb", "97": BRIGHT,
 }
 
-# Fake agents on PATH, so the agent chips do not depend on this machine.
-AGENTS = ["claude", "codex", "opencode"]
+# Answers every Herdr call with nothing, so the popup never reaches a real one.
 FAKE_HERDR = """#!/bin/sh
-case "$1 $2" in
-  "agent start") echo "  [possible values: claude, codex, cursor, gemini, opencode, pi]";;
-  "agent list") echo '{"result":{"agents":[
-    {"pane_id":"w1:p2","agent":"claude","agent_status":"idle","terminal_title_stripped":"Release prep","foreground_cwd":"HOME/projects/budgit"},
-    {"pane_id":"w1:p3","agent":"codex","agent_status":"working","terminal_title_stripped":"Flaky e2e tests","foreground_cwd":"HOME/projects/budgit"}]}}';;
-  *) echo '{"result":{}}';;
-esac
+echo '{"result":{}}'
 """
 
 
@@ -224,18 +217,13 @@ def main():
     other = os.path.join(home, "projects", "website")
     for path in (folder, other, os.path.join(root, "bin"), os.path.join(root, "notes"), os.path.join(root, "state")):
         os.makedirs(path)
-    for name in AGENTS:
-        with open(os.path.join(root, "bin", name), "w") as handle:
-            handle.write("#!/bin/sh\n")
     herdr = os.path.join(root, "bin", "herdr")
     with open(herdr, "w") as handle:
-        handle.write(FAKE_HERDR.replace("HOME", home))
+        handle.write(FAKE_HERDR)
     os.chmod(herdr, 0o755)
     with open(os.path.join(root, "notes", "notes.jsonl"), "w") as handle:
         for note in fixture_notes(folder, other):
             handle.write(json.dumps(note) + "\n")
-    with open(os.path.join(root, "state", "prefs.json"), "w") as handle:
-        handle.write('{"kind":"claude","destination":"tab"}')
 
     env = {
         "HOME": home,
