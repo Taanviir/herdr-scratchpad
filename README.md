@@ -10,8 +10,8 @@ Later you can hand them to an agent.
 - Label notes with `#hashtags`, and give a note a date to pin it to the top.
 - Each note records where it came from: the folder (the git root if there is
   one), the branch, and the agent and session that were in front of you.
-- Start a new agent with selected notes as its brief, or send them to an
-  agent that is already running.
+- Hand notes to an agent through [Quick Prompt](https://github.com/Taanviir/herdr-quick-prompt):
+  a new one in a tab, split or worktree, or one that is already running.
 - Reopen the Claude Code or Codex session a note came from.
 - Agents read and write the same notes with the `scratch` command.
 - No dependencies, no build step. Node 18 or newer.
@@ -21,6 +21,7 @@ Later you can hand them to an agent.
 ```bash
 herdr plugin install Taanviir/herdr-scratchpad
 herdr plugin action invoke taanviir.scratchpad.setup
+herdr plugin install Taanviir/herdr-quick-prompt   # to hand notes to agents
 ```
 
 Setup binds **ctrl+b** then **a** in your `config.toml`, and links `scratch`
@@ -80,24 +81,21 @@ the field shows how it was read before you press ⏎:
 | --- | --- |
 | `⏎` | edit the note in the box |
 | `space` | tick a note; actions apply to the ticked notes, or the one under the cursor |
-| `ctrl+n` | start an agent with the notes: pick it with `1`…`9`, `ctrl+t` for a tab or split, see the exact prompt, ⏎ to start |
-| `ctrl+r` | send the notes to an agent that is already running |
+| `ctrl+n` | hand the notes to an agent, through Quick Prompt |
 | `ctrl+w` | set or clear the date the notes are due |
 | `ctrl+x` | mark done, or reopen |
 | `ctrl+d` twice | delete |
 | `ctrl+o` | reopen the Claude Code or Codex session the note came from |
 | `esc` | back to the box |
 
-![Starting an agent with two ticked notes, showing the exact prompt it will get](docs/scratchpad-agent.png)
+Typing a letter in the list jumps back to the box.
 
-Typing a letter in the list jumps back to the box. An agent started from notes
-gets them as a list with their ids, plus a line asking it to run
-`scratch done <id>` when it finishes each one. When sending to a running
-agent, agents working in the notes' folder are listed first.
-
-The popup paints its own dark background so the pane behind it does not show
-through. `SCRATCHPAD_BG` takes another 256-colour number; `NO_COLOR` turns
-colour off.
+**Handing notes to an agent.** `ctrl+n` opens Quick Prompt with the notes
+already written as its prompt, in the notes' folder. From there it is Quick
+Prompt as usual: pick the agent, a tab, split or worktree, and ⏎ to launch, or
+`ctrl+r` to send the notes to an agent that is already running. The prompt
+lists each note with its id and asks the agent to run `scratch done <id>` when
+it finishes one. Without Quick Prompt installed, `ctrl+n` says how to get it.
 
 ## For agents
 
@@ -129,7 +127,6 @@ add something like this to your `AGENTS.md` or `CLAUDE.md`:
 | --- | --- |
 | `~/.local/share/herdr-scratchpad/notes.jsonl` | the notes, one per line (`SCRATCHPAD_HOME` moves it) |
 | plugin state dir, `draft.txt` | the unsaved note |
-| plugin state dir, `prefs.json` | last agent and where it opened |
 | plugin state dir, `crash.log` | errors from the popup |
 
 The plugin state directory is normally
@@ -142,8 +139,9 @@ herdr plugin link .
 npm test
 ```
 
-Changes take effect the next time the popup opens. `bin/launch.js` starts real
-agents. Point `HERDR_BIN_PATH` at a stub to exercise it without them.
+Changes take effect the next time the popup opens. `ctrl+n` and `ctrl+o` open
+real popups and agents. Point `HERDR_BIN_PATH` at a stub to exercise them
+without that.
 
 The README images are drawn from the popup's real output, against fixture
 notes, so they cannot drift from what the code prints:
@@ -153,7 +151,6 @@ D='\x1b[B'
 uv run --with pillow tools/screenshot.py docs/scratchpad.png --keys $D $D
 uv run --with pillow tools/screenshot.py docs/scratchpad-labels.png --type 'Pin the Node version in the deploy script #'
 uv run --with pillow tools/screenshot.py docs/scratchpad-when.png --keys $D $D $D '\x17' 'fri 14:00'
-uv run --with pillow tools/screenshot.py docs/scratchpad-agent.png --keys $D $D ' ' ' ' '\x0e'
 ```
 
 ## Releasing
