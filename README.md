@@ -5,6 +5,9 @@ busy. Press a key, type the note, and go back to what you were doing. Notes go
 into one global scratchpad and are tied to the folder or repo you were in.
 Later you can hand them to an agent.
 
+![The Scratchpad popup: a note box, notes grouped by label with dated ones on top, and the selected note in full](docs/scratchpad.png)
+
+- Label notes with `#hashtags`, and give a note a date to pin it to the top.
 - Each note records where it came from: the folder (the git root if there is
   one), the branch, and the agent and session that were in front of you.
 - Start a new agent with selected notes as its brief, or send them to an
@@ -39,6 +42,26 @@ filed under a parent folder also show up in its subfolders.
 Notes are grouped under their first label. Typing `#` suggests labels you
 have used before, and `tab` completes one.
 
+![Typing # in the note box suggests the labels already in use](docs/scratchpad-labels.png)
+
+**Dates.** `ctrl+w` on a note asks when it is due. Dated notes move into an
+**upcoming** group at the top of the list, soonest first: overdue in red,
+today's in yellow. Type the date the way you would say it, and the line under
+the field shows how it was read before you press ⏎:
+
+| You type | It means |
+| --- | --- |
+| `today 5pm`, `17:00`, `9:30am` | today at that time, or tomorrow if it has passed |
+| `tonight` | today at 20:00 |
+| `tomorrow`, `fri`, `next week` | that day at 09:00 |
+| `fri 14:00`, `tomorrow at 9am` | that day at that time |
+| `in 30 min`, `in 2h`, `in 3 days`, `in 1w` | that long from now |
+| `oct 12`, `12 oct`, `2026-10-12 14:00` | that date, at 09:00 unless a time is given |
+
+⏎ on an empty field clears the date. Ticked notes all get the same date.
+
+![Setting a date: the field reads "fri 14:00" as Fri 9 Oct 2026, 14:00](docs/scratchpad-when.png)
+
 **Writing a note**
 
 | Key | |
@@ -59,10 +82,13 @@ have used before, and `tab` completes one.
 | `space` | tick a note; actions apply to the ticked notes, or the one under the cursor |
 | `ctrl+n` | start an agent with the notes: pick it with `1`…`9`, `ctrl+t` for a tab or split, see the exact prompt, ⏎ to start |
 | `ctrl+r` | send the notes to an agent that is already running |
+| `ctrl+w` | set or clear the date the notes are due |
 | `ctrl+x` | mark done, or reopen |
 | `ctrl+d` twice | delete |
 | `ctrl+o` | reopen the Claude Code or Codex session the note came from |
 | `esc` | back to the box |
+
+![Starting an agent with two ticked notes, showing the exact prompt it will get](docs/scratchpad-agent.png)
 
 Typing a letter in the list jumps back to the box. An agent started from notes
 gets them as a list with their ids, plus a line asking it to run
@@ -81,6 +107,8 @@ scratch add --anywhere -  < idea.md                    # from stdin, no folder
 scratch list                                           # open notes here
 scratch list --all --json
 scratch list --label release                           # only #release notes
+scratch add --due "fri 14:00" "send the release notes" # dated; lists first
+scratch due <id> tomorrow                              # or: scratch due <id> none
 scratch show <id>
 scratch done <id>
 ```
@@ -114,15 +142,26 @@ herdr plugin link .
 npm test
 ```
 
+Changes take effect the next time the popup opens. `bin/launch.js` starts real
+agents. Point `HERDR_BIN_PATH` at a stub to exercise it without them.
+
+The README images are drawn from the popup's real output, against fixture
+notes, so they cannot drift from what the code prints:
+
+```bash
+D='\x1b[B'
+uv run --with pillow tools/screenshot.py docs/scratchpad.png --keys $D $D
+uv run --with pillow tools/screenshot.py docs/scratchpad-labels.png --type 'Pin the Node version in the deploy script #'
+uv run --with pillow tools/screenshot.py docs/scratchpad-when.png --keys $D $D $D '\x17' 'fri 14:00'
+uv run --with pillow tools/screenshot.py docs/scratchpad-agent.png --keys $D $D ' ' ' ' '\x0e'
+```
+
 ## Releasing
 
 The version lives in `herdr-plugin.toml` and `package.json`, and the two must
 match. Merging a version bump to `main` runs the tests and publishes `vX.Y.Z`
 as a GitHub release. Install a specific release with
 `herdr plugin install Taanviir/herdr-scratchpad --ref vX.Y.Z`.
-
-Changes take effect the next time the popup opens. `bin/launch.js` starts real
-agents. Point `HERDR_BIN_PATH` at a stub to exercise it without them.
 
 ## License
 

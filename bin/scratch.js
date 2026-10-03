@@ -9,6 +9,7 @@ const store = require("../lib/store");
 const { describe, folderFor, relatedTo } = require("../lib/source");
 const { shortenPath } = require("../lib/ui");
 const { labels } = require("../lib/labels");
+const when = require("../lib/when");
 
 const USAGE = `scratch: a global scratchpad of notes, linked to folders
 
@@ -16,6 +17,7 @@ const USAGE = `scratch: a global scratchpad of notes, linked to folders
                                  #words in the text are its labels
       --folder DIR                 file it under DIR instead
       --anywhere                   file it under no folder
+      --due WHEN                   date it: "tomorrow 9am", "fri", "in 2h", "2026-10-12 14:00"
   scratch list                   open notes for this folder
       --all                        every folder
       --label NAME                 only notes labelled #NAME
@@ -25,6 +27,7 @@ const USAGE = `scratch: a global scratchpad of notes, linked to folders
   scratch done <id>…             mark finished
   scratch undo <id>…             mark open again
   scratch edit <id> <text…>      replace the text
+  scratch due <id> <when|none>   set or clear its date; dated notes list first
   scratch rm <id>…               delete
   scratch where                  the notes file
 
@@ -36,6 +39,7 @@ function parse(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--folder") flags.folder = argv[++i];
+    else if (arg === "--due") flags.due = argv[++i];
     else if (arg === "--label") flags.label = String(argv[++i] ?? "").replace(/^#/, "").toLowerCase();
     else if (arg === "--all" || arg === "--done" || arg === "--json" || arg === "--anywhere") flags[arg.slice(2)] = true;
     else if (arg === "-h" || arg === "--help") flags.help = true;
@@ -53,15 +57,35 @@ function line(note) {
   const mark = note.done ? "x" : " ";
   const [first, ...more] = note.text.split("\n");
   const extra = more.length ? ` (+${more.length} lines)` : "";
-  return `[${mark}] ${note.id}  ${first}${extra}`;
+  const due = note.due && !note.done ? `${when.short(note.due)}  ` : "";
+  return `[${mark}] ${note.id}  ${due}${first}${extra}`;
+}
+
+function readWhen(text) {
+  const date = when.parse(text);
+  if (!date) throw new Error(`cannot read "${text}" as a date; try "tomorrow 9am", "fri", "in 2h" or "2026-10-12 14:00"`);
+  return date.toISOString();
+}
+
+// Dated notes first, soonest at the top, the way the popup lists them.
+const byDue = (a, b) => (!a.due - !b.due) || (a.due && b.due ? a.due.localeCompare(b.due) : 0);
+
+function cmdDue(rest) {
+  const [id, ...words] = rest;
+  if (!id || !words.length) throw new Error("scratch due <id> <when|none>");
+  const text = words.join(" ");
+  const due = /^(none|clear|off|-)$/i.test(text) ? null : readWhen(text);
+  const note = store.setDue(id, due);
+  console.log(due ? `${note.id} due ${when.long(due)}` : `${note.id} has no date`);
 }
 
 function cmdAdd(flags, rest) {
   const text = textFrom(rest);
   const { folder, source } = describe({ paneId: process.env.HERDR_PANE_ID, cwd: process.cwd() });
   const folders = flags.anywhere ? [] : [flags.folder ? folderFor(flags.folder) : folder].filter(Boolean);
-  const note = store.add({ text, folders, source });
-  console.log(`added ${note.id}${folders[0] ? ` to ${shortenPath(folders[0], 60)}` : ""}`);
+  const note = store.add({ text, folders, source, due: flags.due === undefined ? null : readWhen(flags.due) });
+  const due = note.due ? `, due ${when.long(note.due)}` : "";
+  console.log(`added ${note.id}${folders[0] ? ` to ${shortenPath(folders[0], 60)}` : ""}${due}`);
 }
 
 function cmdList(flags) {
@@ -69,7 +93,8 @@ function cmdList(flags) {
   const notes = store.readAll()
     .filter((n) => flags.done || !n.done)
     .filter((n) => relatedTo(n, folder))
-    .filter((n) => !flags.label || labels(n.text).includes(flags.label));
+    .filter((n) => !flags.label || labels(n.text).includes(flags.label))
+    .sort(byDue);
   if (flags.json) return console.log(JSON.stringify(notes, null, 2));
   if (!notes.length) return console.log(folder ? `no open notes for ${shortenPath(folder, 60)} (try --all)` : "no notes");
 
@@ -92,6 +117,7 @@ function cmdShow(rest) {
   const rows = [
     ["folders", (note.folders ?? []).join(", ") || "anywhere"],
     ["created", note.created],
+    ["due", note.due && when.long(note.due)],
     ["branch", src.branch],
     ["agent", src.agent && `${src.agent}${src.session ? ` session ${src.session}` : ""}`],
     ["from", src.title],
@@ -116,6 +142,7 @@ function main() {
     case "show": return cmdShow(rest);
     case "done": return each(rest, (id) => store.setDone(id, true), "done");
     case "undo": return each(rest, (id) => store.setDone(id, false), "reopened");
+    case "due": return cmdDue(rest);
     case "edit": return console.log(`edited ${store.edit(rest[0], rest.slice(1).join(" ")).id}`);
     case "rm": return each(rest, store.remove, "removed");
     case "where": return console.log(store.file());

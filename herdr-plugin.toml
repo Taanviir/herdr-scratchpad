@@ -1,6 +1,6 @@
 id = "taanviir.scratchpad"
 name = "Scratchpad"
-version = "0.1.0"
+version = "0.2.0"
 min_herdr_version = "0.8.0"
 description = "A global scratchpad for ideas and notes, linked to folders, that agents can read and work from"
 platforms = ["linux", "macos", "windows"]
