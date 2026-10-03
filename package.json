@@ -1,6 +1,6 @@
 {
   "name": "herdr-scratchpad",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "commonjs",
   "description": "Herdr plugin: a global scratchpad of notes linked to folders, which agents can read and work from",
