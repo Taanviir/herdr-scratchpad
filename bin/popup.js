@@ -327,7 +327,7 @@ function launchBody(width, rows) {
   const notes = targets();
   lines[0] = `${style.bold("Start an agent")} ${style.dim("with")} ${style.accent(plural(notes.length, "note"))}`;
   lines[2] = chipRow(width);
-  lines[3] = `${style.dim("opens in a")} ${DESTINATIONS[state.destination].label} ${style.dim("(ctrl+t)")}${DOT}${shortenPath(launchDirectory(notes), width - 40)}`;
+  lines[3] = `${style.dim("opens in")} ${DESTINATIONS[state.destination].label} ${style.dim("(ctrl+t)")}${DOT}${shortenPath(launchDirectory(notes), width - 40)}`;
   lines[5] = style.dim(`─ the prompt it gets ${"─".repeat(Math.max(0, width - 21))}`);
   const prompt = wrapWords(compose(notes), width - 2);
   const room = rows - 9;
