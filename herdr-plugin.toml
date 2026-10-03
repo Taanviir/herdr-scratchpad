@@ -1,0 +1,26 @@
+id = "taanviir.scratchpad"
+name = "Scratchpad"
+version = "0.1.0"
+min_herdr_version = "0.8.0"
+description = "A global scratchpad for ideas and notes, linked to folders, that agents can read and work from"
+platforms = ["linux", "macos", "windows"]
+
+[[actions]]
+id = "open"
+title = "Scratchpad"
+contexts = ["workspace"]
+command = ["node", "bin/open.js"]
+
+[[actions]]
+id = "setup"
+title = "Set up the Scratchpad key and the scratch command"
+contexts = ["workspace"]
+command = ["node", "bin/setup.js"]
+
+[[panes]]
+id = "popup"
+title = "Scratchpad"
+placement = "popup"
+width = 108
+height = 28
+command = ["node", "bin/popup.js"]

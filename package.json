@@ -1,0 +1,17 @@
+{
+  "name": "herdr-scratchpad",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "Herdr plugin: a global scratchpad of notes linked to folders, which agents can read and work from",
+  "license": "MIT",
+  "bin": {
+    "scratch": "bin/scratch.js"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
