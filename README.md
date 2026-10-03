@@ -97,6 +97,9 @@ Prompt as usual: pick the agent, a tab, split or worktree, and ⏎ to launch, or
 lists each note with its id and asks the agent to run `scratch done <id>` when
 it finishes one. Without Quick Prompt installed, `ctrl+n` says how to get it.
 
+It works the other way too: `ctrl+s` in Quick Prompt saves the prompt you were
+about to launch here as a note, for when it is not the right time.
+
 ## For agents
 
 ```text
