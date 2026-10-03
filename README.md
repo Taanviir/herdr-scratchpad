@@ -5,6 +5,8 @@ busy. Press a key, type the note, and go back to what you were doing. Notes go
 into one global scratchpad and are tied to the folder or repo you were in.
 Later you can hand them to an agent.
 
+![The Scratchpad popup: a note box, notes grouped by label with dated ones on top, and the selected note in full](docs/scratchpad.png)
+
 - Label notes with `#hashtags`, and give a note a date to pin it to the top.
 - Each note records where it came from: the folder (the git root if there is
   one), the branch, and the agent and session that were in front of you.
@@ -40,6 +42,8 @@ filed under a parent folder also show up in its subfolders.
 Notes are grouped under their first label. Typing `#` suggests labels you
 have used before, and `tab` completes one.
 
+![Typing # in the note box suggests the labels already in use](docs/scratchpad-labels.png)
+
 **Dates.** `ctrl+w` on a note asks when it is due. Dated notes move into an
 **upcoming** group at the top of the list, soonest first: overdue in red,
 today's in yellow. Type the date the way you would say it, and the line under
@@ -55,6 +59,8 @@ the field shows how it was read before you press ⏎:
 | `oct 12`, `12 oct`, `2026-10-12 14:00` | that date, at 09:00 unless a time is given |
 
 ⏎ on an empty field clears the date. Ticked notes all get the same date.
+
+![Setting a date: the field reads "fri 14:00" as Fri 9 Oct 2026, 14:00](docs/scratchpad-when.png)
 
 **Writing a note**
 
@@ -81,6 +87,8 @@ the field shows how it was read before you press ⏎:
 | `ctrl+d` twice | delete |
 | `ctrl+o` | reopen the Claude Code or Codex session the note came from |
 | `esc` | back to the box |
+
+![Starting an agent with two ticked notes, showing the exact prompt it will get](docs/scratchpad-agent.png)
 
 Typing a letter in the list jumps back to the box. An agent started from notes
 gets them as a list with their ids, plus a line asking it to run
@@ -136,6 +144,17 @@ npm test
 
 Changes take effect the next time the popup opens. `bin/launch.js` starts real
 agents. Point `HERDR_BIN_PATH` at a stub to exercise it without them.
+
+The README images are drawn from the popup's real output, against fixture
+notes, so they cannot drift from what the code prints:
+
+```bash
+D='\x1b[B'
+uv run --with pillow tools/screenshot.py docs/scratchpad.png --keys $D $D
+uv run --with pillow tools/screenshot.py docs/scratchpad-labels.png --type 'Pin the Node version in the deploy script #'
+uv run --with pillow tools/screenshot.py docs/scratchpad-when.png --keys $D $D $D '\x17' 'fri 14:00'
+uv run --with pillow tools/screenshot.py docs/scratchpad-agent.png --keys $D $D ' ' ' ' '\x0e'
+```
 
 ## Releasing
 

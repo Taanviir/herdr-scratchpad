@@ -1,3 +1,4 @@
 node_modules/
 .state/
 .claude/
+__pycache__/
