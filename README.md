@@ -68,7 +68,7 @@ the field shows how it was read before you press ⏎:
 | Key | |
 | --- | --- |
 | `⏎` | save |
-| `shift+⏎`, `alt+⏎`, `ctrl+j` | new line |
+| `\` `⏎`, `shift+⏎`, `alt+⏎`, `ctrl+j` | new line; many terminals send `shift+⏎` as a plain `⏎`, so a backslash before `⏎` works everywhere |
 | `ctrl+g` | save under no folder instead, or back |
 | `ctrl+v` | paste from the system clipboard |
 | `↓` | move into the notes |

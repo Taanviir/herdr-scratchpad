@@ -255,8 +255,8 @@ function hintRow() {
   if (state.confirmDelete) return style.warn(`ctrl+d again deletes ${plural(targets().length, "note")} · any other key keeps them`);
   if (state.focus === "input") {
     if (suggestions().length) return keys([["tab", "complete label"], ["⏎", "save"], ["esc", "close"]]);
-    if (state.editing) return keys([["⏎", "save"], ["shift+⏎", "new line"], ["esc", "cancel"]]);
-    return keys([["⏎", "save"], ["shift+⏎", "new line"], state.notes.length && ["↓", "notes"], ["esc", "close"]]);
+    if (state.editing) return keys([["⏎", "save"], ["\\⏎", "new line"], ["esc", "cancel"]]);
+    return keys([["⏎", "save"], ["\\⏎", "new line"], state.notes.length && ["↓", "notes"], ["esc", "close"]]);
   }
   const src = current()?.source ?? {};
   return keys([
@@ -362,7 +362,13 @@ function onInputKey(chunk, key) {
     return;
   }
   if (key.name === "tab") return switchTab(key.shift ? -1 : 1);
-  if (key.name === "return" && !isNewline(chunk, key)) return save();
+  // Many terminals send shift+⏎ as a plain ⏎, so a backslash before ⏎ also
+  // asks for a newline, as in Claude Code and Quick Prompt.
+  if (key.name === "return" && !isNewline(chunk, key)) {
+    if (state.editor.cells[state.editor.cursor - 1] !== "\\") return save();
+    state.editor.backspace();
+    return state.editor.insert("\n");
+  }
   if (isNewline(chunk, key)) return state.editor.insert("\n");
   if (key.ctrl && key.name === "g" && here.folder && !state.editing) {
     state.anywhere = !state.anywhere;
