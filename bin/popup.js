@@ -15,6 +15,7 @@ const { labels, title, known, group, partialTag } = require("../lib/labels");
 const when = require("../lib/when");
 const { run, spawnDetached } = require("../lib/herdr");
 const { readClipboard } = require("../lib/clipboard");
+const { relink } = require("../lib/link");
 const { STATE_DIR, start, isNewline, isPrintable, editKey } = require("../lib/term");
 
 const LAUNCHER = path.join(__dirname, "launch.js");
@@ -581,6 +582,7 @@ function onPaste(text) {
 }
 
 reload();
+relink();
 const ui = start({
   name: "popup",
   body: (width, rows) => {
