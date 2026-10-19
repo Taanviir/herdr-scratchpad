@@ -6,8 +6,10 @@
 const fs = require("node:fs");
 const { run, notify, HerdrError } = require("../lib/herdr");
 
-// The Scratchpad popup has to be gone before Herdr will open another.
-const HANDOFF_DELAY_MS = 250;
+// The Scratchpad popup has to be gone before Herdr will open another, and
+// Herdr says ui_busy until it is.
+const HANDOFF_ATTEMPTS = 20;
+const HANDOFF_RETRY_MS = 50;
 const START_ATTEMPTS = 12;
 const START_RETRY_MS = 400;
 
@@ -16,7 +18,6 @@ function sleep(ms) {
 }
 
 function handoff(request) {
-  sleep(HANDOFF_DELAY_MS);
   const env = {
     QUICK_PROMPT_TEXT: request.prompt,
     QUICK_PROMPT_SOURCE: "Scratchpad",
@@ -26,7 +27,12 @@ function handoff(request) {
   };
   const args = ["plugin", "pane", "open", "--plugin", "taanviir.quick-prompt", "--entrypoint", "picker"];
   for (const [key, value] of Object.entries(env)) if (value) args.push("--env", `${key}=${value}`);
-  run(args);
+  for (let attempt = 1; ; attempt += 1) {
+    const res = run(args, { check: false });
+    if (res.ok) return;
+    if (res.code !== "ui_busy" || attempt === HANDOFF_ATTEMPTS) throw new HerdrError(res.message);
+    sleep(HANDOFF_RETRY_MS);
+  }
 }
 
 // Names must match [a-z][a-z0-9_-]{0,31} and be unique among live agents.
@@ -53,7 +59,8 @@ function resume({ kind, args, cwd, workspace }) {
   for (let attempt = 0; attempt < START_ATTEMPTS; attempt += 1) {
     const res = run(start, { check: false });
     // Not idle means the session is up and showing something: that is fine.
-    if (res.ok || /agent_not_ready|agent_pane_busy/i.test(`${res.code ?? ""} ${res.message}`)) return;
+    // A busy pane is a shell still starting, and has not taken the launch.
+    if (res.ok || /agent_not_ready/i.test(`${res.code ?? ""} ${res.message}`)) return;
     last = res.message;
     if (!/pane|shell|prompt|busy|not_available/i.test(`${res.code ?? ""} ${last}`)) break;
     sleep(START_RETRY_MS);
@@ -63,13 +70,18 @@ function resume({ kind, args, cwd, workspace }) {
 
 const JOBS = { handoff, resume };
 
-const file = process.argv[2];
-try {
-  const request = JSON.parse(fs.readFileSync(file, "utf8"));
-  JOBS[request.type](request);
-} catch (error) {
-  notify("Scratchpad failed", error.message ?? String(error));
-  process.exitCode = 1;
-} finally {
-  try { fs.unlinkSync(file); } catch { /* already gone */ }
+function main(file) {
+  try {
+    const request = JSON.parse(fs.readFileSync(file, "utf8"));
+    JOBS[request.type](request);
+  } catch (error) {
+    notify("Scratchpad failed", error.message ?? String(error));
+    process.exitCode = 1;
+  } finally {
+    try { fs.unlinkSync(file); } catch { /* already gone */ }
+  }
 }
+
+if (require.main === module) main(process.argv[2]);
+
+module.exports = JOBS;
