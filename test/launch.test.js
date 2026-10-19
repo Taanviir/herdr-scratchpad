@@ -22,17 +22,19 @@ function worker(replies) {
 }
 
 const busy = { ok: false, code: "agent_pane_busy", message: "pane is not at a shell prompt" };
-const tab = { ok: true, result: { root_pane: { pane_id: "w1:p2" } } };
-const none = { ok: true, result: { agents: [] } };
+const tab = { ok: true, result: { tab: { tab_id: "w1:t4" }, root_pane: { pane_id: "w1:p2" } } };
 
 test("a session reopened into a shell still starting is retried until it takes", () => {
-  const { jobs, calls } = worker([tab, none, busy, busy, { ok: true, result: {} }]);
+  const { jobs, calls } = worker([tab, busy, busy, { ok: true, result: {} }]);
   jobs.resume({ kind: "claude", args: ["--resume", "abc"], cwd: "/repo" });
-  assert.strictEqual(calls.filter((args) => args[1] === "start").length, 3);
+  const starts = calls.filter((args) => args[1] === "start");
+  assert.strictEqual(starts.length, 3);
+  assert.strictEqual(starts[0][2], "sp-claude-w1-p2", "named after its pane, with no agent list");
+  assert.ok(!calls.some((args) => args[1] === "list"));
 });
 
 test("a session that is up but not idle counts as started", () => {
-  const { jobs, calls } = worker([tab, none, { ok: false, code: "agent_not_ready", message: "trust dialog" }]);
+  const { jobs, calls } = worker([tab, { ok: false, code: "agent_not_ready", message: "trust dialog" }]);
   jobs.resume({ kind: "claude", args: ["--resume", "abc"] });
   assert.strictEqual(calls.filter((args) => args[1] === "start").length, 1);
 });
@@ -49,4 +51,17 @@ test("a handoff Herdr refuses for another reason fails at once", () => {
   const { jobs, calls } = worker([{ ok: false, code: "plugin_disabled", message: "plugin is disabled" }]);
   assert.throws(() => jobs.handoff({ prompt: "fix it" }), /plugin is disabled/);
   assert.strictEqual(calls.length, 1);
+});
+
+test("a session still loading when the wait runs out counts as started", () => {
+  const { jobs, calls } = worker([tab, { ok: false, code: "timeout", message: "timed out" }]);
+  jobs.resume({ kind: "codex", args: ["resume", "abc"] });
+  assert.strictEqual(calls.filter((args) => args[1] === "start").length, 1);
+  assert.ok(!calls.some((args) => args[0] === "tab" && args[1] === "close"));
+});
+
+test("a session that never starts closes the tab made for it", () => {
+  const { jobs, calls } = worker([tab, { ok: false, code: "agent_exited", message: "claude exited" }]);
+  assert.throws(() => jobs.resume({ kind: "claude", args: ["--resume", "abc"] }), /claude exited/);
+  assert.deepStrictEqual(calls.at(-1), ["tab", "close", "w1:t4"]);
 });

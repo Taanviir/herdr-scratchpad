@@ -8,6 +8,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { run, notify, BIN } = require("../lib/herdr");
+const { link } = require("../lib/link");
 
 const PLUGIN_ID = "taanviir.scratchpad";
 const BINDINGS = [
@@ -53,33 +54,9 @@ function bindKeys(report) {
   if (!reloaded.ok) report.push(`config reload failed: ${reloaded.message}`);
 }
 
-function linkCommand(report) {
-  const script = path.join(__dirname, "scratch.js");
-  if (process.platform === "win32") {
-    report.push(`add a scratch command that runs: node "${script}"`);
-    return;
-  }
-  const dir = process.env.SCRATCHPAD_BIN_DIR ?? path.join(os.homedir(), ".local", "bin");
-  const link = path.join(dir, "scratch");
-  try {
-    fs.mkdirSync(dir, { recursive: true });
-    const existing = fs.lstatSync(link, { throwIfNoEntry: false });
-    if (existing && !existing.isSymbolicLink()) {
-      report.push(`${link} exists and is not ours; scratch was not linked`);
-      return;
-    }
-    if (existing) fs.unlinkSync(link);
-    fs.symlinkSync(script, link);
-    const onPath = (process.env.PATH ?? "").split(path.delimiter).includes(dir);
-    report.push(`scratch linked into ${dir}${onPath ? "" : " (not on your PATH)"}`);
-  } catch (error) {
-    report.push(`could not link scratch: ${error.message}`);
-  }
-}
-
 const report = [];
 bindKeys(report);
-linkCommand(report);
+report.push(link());
 const message = report.join("\n");
 process.stdout.write(`${message}\n`);
 notify("Scratchpad", report.join(" · "), "done");
