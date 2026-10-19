@@ -55,3 +55,10 @@ test("labels say how close the date is", () => {
   assert.strictEqual(urgency(new Date(2026, 9, 3, 23, 0), NOW), "today");
   assert.strictEqual(urgency(new Date(2026, 9, 1), NOW), "overdue");
 });
+
+test("a day that does not exist is not a date", () => {
+  assert.strictEqual(read("2026-02-31"), null);
+  assert.strictEqual(read("feb 31"), null);
+  assert.strictEqual(read("31 apr"), null);
+  assert.strictEqual(read("2028-02-29"), at(2028, 1, 29, 9, 0), "a leap day is real");
+});

@@ -69,3 +69,8 @@ test("each note is one line, and a broken line costs only itself", () => {
   store.add({ text: "written after the damage" });
   assert.ok(fs.readFileSync(store.file(), "utf8").includes("{not json"));
 });
+
+test("a note filed at the root shows up everywhere below it", () => {
+  assert.strictEqual(relatedTo({ folders: [path.sep] }, path.join(path.sep, "home", "me")), true);
+  assert.strictEqual(relatedTo({ folders: [path.join(path.sep, "repo")] }, path.join(path.sep, "repository")), false);
+});
