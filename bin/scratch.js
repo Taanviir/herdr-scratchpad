@@ -133,7 +133,7 @@ function each(rest, fn, verb) {
 function main() {
   const [command, ...args] = process.argv.slice(2);
   const { flags, rest } = parse(args);
-  if (!command || flags.help || command === "help") return console.log(USAGE);
+  if (!command || flags.help || ["help", "--help", "-h"].includes(command)) return console.log(USAGE);
 
   switch (command) {
     case "add": return cmdAdd(flags, rest);
