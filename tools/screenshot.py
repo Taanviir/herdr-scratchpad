@@ -31,12 +31,12 @@ FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
 FONT_SIZE = 16
 PAD = 14
 MARGIN = 18
-# What Herdr hands the process for a 108x28 popup: the frame takes the rest.
-COLS, ROWS = 105, 26
+# What Herdr hands the process for a 92x23 popup: the frame takes the rest.
+COLS, ROWS = 89, 21
 
-# Catppuccin Mocha, Herdr's default theme, plus the popup's own background.
+# Catppuccin Mocha, Herdr's default theme.
 BASE = "#1e1e2e"
-POPUP = "#262626"
+POPUP = BASE  # the popup leaves the background to Herdr
 TEXT = "#cdd6f4"
 BRIGHT = "#f5f6fa"
 DIM = "#6c7086"

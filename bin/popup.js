@@ -119,9 +119,18 @@ function suggestions() {
 
 const DOT = ` ${style.dim("·")} `;
 
-// "key label" pairs, the key bright so the eye finds it first.
-function keys(pairs) {
-  return pairs.filter(Boolean).map(([key, label]) => `${style.bright(key)} ${style.dim(label)}`).join("  ");
+// "key label" pairs, the key bright so the eye finds it first. Pairs come
+// most useful first, and those that do not fit in `width` are left off.
+function keys(pairs, width = Infinity) {
+  const shown = [];
+  let used = 0;
+  for (const [key, label] of pairs.filter(Boolean)) {
+    const size = displayWidth(`${key} ${label}`) + (shown.length ? 2 : 0);
+    if (used + size > width) break;
+    shown.push(`${style.bright(key)} ${style.dim(label)}`);
+    used += size;
+  }
+  return shown.join("  ");
 }
 
 function spread(left, right, width) {
@@ -260,7 +269,7 @@ function emptyLines() {
   ];
 }
 
-function notesHints() {
+function notesHints(width) {
   if (state.notice) return style.warn(state.notice);
   if (state.confirmDelete) return style.warn(`ctrl+d again deletes ${plural(targets().length, "note")} · any other key keeps them`);
   if (!current()) return keys([["tab", "write"], ["← →", "folders"], ["esc", "close"]]);
@@ -268,13 +277,13 @@ function notesHints() {
   return keys([
     ["tab", "write"],
     ["⏎", "edit"],
-    ["space", "tick"],
     ["ctrl+n", "agent"],
-    ["ctrl+w", "when"],
-    ["ctrl+x", current().done ? "reopen" : "done"],
-    ["ctrl+d", "delete"],
     src.session && RESUME_ARGS[src.agent] && ["ctrl+o", "session"],
-  ]);
+    ["ctrl+x", current().done ? "reopen" : "done"],
+    ["ctrl+w", "when"],
+    ["ctrl+d", "delete"],
+    ["space", "tick"],
+  ], width);
 }
 
 function notesBody(width, rows) {
@@ -282,7 +291,7 @@ function notesBody(width, rows) {
   lines[0] = tabRow(width);
   lines[1] = style.dim("─".repeat(width));
   lines[rows - 2] = style.dim("─".repeat(width));
-  lines[rows - 1] = notesHints();
+  lines[rows - 1] = notesHints(width);
   const top = 2;
   const height = rows - top - 2;
 
