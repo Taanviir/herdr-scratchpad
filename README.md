@@ -5,7 +5,7 @@ busy. Press a key, type the note, and go back to what you were doing. Notes go
 into one global scratchpad and are tied to the folder or repo you were in.
 Later you can hand them to an agent.
 
-![The Scratchpad popup: a note box, notes grouped by label with dated ones on top, and the selected note in full](docs/scratchpad.png)
+![The Scratchpad notes: grouped by label with dated ones on top, and the selected note in full](docs/scratchpad.png)
 
 - Label notes with `#hashtags`, and give a note a date to pin it to the top.
 - Each note records where it came from: the folder (the git root if there is
@@ -31,19 +31,20 @@ bound is left alone.
 
 ## The popup
 
-The cursor starts in the note box. Type, press ⏎, and the note is saved under
-the folder you were in. Below the box, your notes are grouped by label on the
-left, and the selected one is shown in full on the right with where it came
-from.
+The popup opens on an empty page for writing. Type, press ⏎, and the note is
+saved under the folder you were in; the page clears for the next one.
 
-Tabs along the top switch between **This folder**, **All** and **Done**. Notes
-filed under a parent folder also show up in its subfolders.
+`tab` turns to your notes: grouped by label on the left, the selected one in
+full on the right with where it came from. `←` and `→` switch between **This
+folder**, **All** and **Done**. Notes filed under a parent folder also show up
+in its subfolders. `tab` turns back to the page, with whatever you were writing
+still on it.
 
 **Labels.** Any `#word` in a note is a label: `back up the db first #release`.
 Notes are grouped under their first label. Typing `#` suggests labels you
 have used before, and `tab` completes one.
 
-![Typing # in the note box suggests the labels already in use](docs/scratchpad-labels.png)
+![Typing # on the writing page suggests the labels already in use](docs/scratchpad-labels.png)
 
 **Dates.** `ctrl+w` on a note asks when it is due. Dated notes move into an
 **upcoming** group at the top of the list, soonest first: overdue in red,
@@ -71,24 +72,25 @@ the field shows how it was read before you press ⏎:
 | `\` `⏎`, `shift+⏎`, `alt+⏎`, `ctrl+j` | new line; many terminals send `shift+⏎` as a plain `⏎`, so a backslash before `⏎` works everywhere |
 | `ctrl+g` | save under no folder instead, or back |
 | `ctrl+v` | paste from the system clipboard |
-| `↓` | move into the notes |
-| `tab` / `shift+tab` | complete a label, or switch tabs |
+| `tab` | complete a label, or turn to the notes |
 | `esc` | close, keeping what you typed |
 
 **In the notes**
 
 | Key | |
 | --- | --- |
-| `⏎` | edit the note in the box |
+| `tab` | back to writing |
+| `←` `→` | this folder, all, done |
+| `⏎` | edit the note on the writing page; ⏎ saves it, `esc` leaves it as it was |
 | `space` | tick a note; actions apply to the ticked notes, or the one under the cursor |
 | `ctrl+n` | hand the notes to an agent, through Quick Prompt |
 | `ctrl+w` | set or clear the date the notes are due |
 | `ctrl+x` | mark done, or reopen |
 | `ctrl+d` twice | delete |
 | `ctrl+o` | reopen the Claude Code or Codex session the note came from |
-| `esc` | back to the box |
+| `esc` | close |
 
-Typing a letter in the list jumps back to the box.
+Typing a letter in the notes turns back to the page with it.
 
 **Handing notes to an agent.** `ctrl+n` opens Quick Prompt with the notes
 already written as its prompt, in the notes' folder. From there it is Quick
@@ -151,9 +153,9 @@ notes, so they cannot drift from what the code prints:
 
 ```bash
 D='\x1b[B'
-uv run --with pillow tools/screenshot.py docs/scratchpad.png --keys $D $D
+uv run --with pillow tools/screenshot.py docs/scratchpad.png --keys '\t' $D
 uv run --with pillow tools/screenshot.py docs/scratchpad-labels.png --type 'Pin the Node version in the deploy script #'
-uv run --with pillow tools/screenshot.py docs/scratchpad-when.png --keys $D $D $D '\x17' 'fri 14:00'
+uv run --with pillow tools/screenshot.py docs/scratchpad-when.png --keys '\t' $D $D '\x17' 'fri 14:00'
 ```
 
 ## Releasing
