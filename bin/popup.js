@@ -1,8 +1,8 @@
 "use strict";
 
-// The one popup. The cursor starts in the note box, because writing a note is
-// what you usually came for. Below it, the notes sit grouped by label on the
-// left, with the selected one in full on the right.
+// The one popup, with two screens. It opens on an empty page for writing,
+// because a note is what you usually came for. tab turns to the notes: grouped
+// by label on the left, the selected one in full on the right.
 
 const fs = require("node:fs");
 const path = require("node:path");
@@ -26,7 +26,6 @@ const RESUME_ARGS = {
   codex: (id) => ["resume", id],
 };
 
-const MAX_INPUT_ROWS = 3;
 const SUGGESTIONS = 6;
 
 const originPane = process.env.SCRATCHPAD_PANE;
@@ -53,7 +52,7 @@ const selection = process.env.SCRATCHPAD_SELECTION ?? "";
 
 const state = {
   tab: 0,
-  focus: "input", // input | list
+  screen: "write", // write | notes
   editor: new Editor(draft || selection),
   editing: null, // the note being edited in the box, instead of a new one
   stash: "", // the unsaved new note, set aside while editing
@@ -84,7 +83,6 @@ function reload() {
   const ids = new Set(state.notes.map((n) => n.id));
   for (const id of state.ticked) if (!ids.has(id)) state.ticked.delete(id);
   state.index = Math.max(0, Math.min(state.index, state.notes.length - 1));
-  if (!state.notes.length && state.focus === "list") state.focus = "input";
 }
 
 const current = () => state.notes[state.index];
@@ -107,7 +105,7 @@ function ago(iso) {
 }
 
 function typedTag() {
-  if (state.focus !== "input") return null;
+  if (state.screen !== "write") return null;
   return partialTag(state.editor.cells.slice(0, state.editor.cursor).join(""));
 }
 
@@ -162,42 +160,54 @@ function dueText(iso, text) {
 const tags = (names) => names.map((name) => tint(`#${name}`)).join(" ");
 const colourTags = (line) => line.replace(/(^|\s)(#[\p{L}\p{N}][\p{L}\p{N}_-]*)/gu, (_, gap, tag) => gap + tint(tag));
 
-/* ---------- main screen ---------- */
+/* ---------- writing ---------- */
+
+function writeHeader(width) {
+  if (state.editing) return spread(style.bold("Edit note"), style.dim(state.editing), width);
+  const where = state.anywhere ? "anywhere" : shortenPath(here.folder, width - 40);
+  const toggle = here.folder ? style.dim(` · ctrl+g ${state.anywhere ? "this folder" : "anywhere"}`) : "";
+  return spread(style.bold("New note"), `${style.dim("saves to")} ${style.accent(where)}${toggle}`, width);
+}
+
+function noteBox(lines, top, width, height) {
+  const marker = state.editing ? style.accent("✎ ") : style.accent("› ");
+  if (state.editor.text === "") {
+    lines[top] = `${marker}${style.dim(state.editing ? "" : "write a note… add #labels to group it")}`;
+    return { row: top, col: 2 };
+  }
+  const { rows, caret } = state.editor.layout(width - 2);
+  const shown = Math.min(height, rows.length);
+  const first = Math.max(0, Math.min(caret.row - shown + 1, rows.length - shown));
+  for (let i = 0; i < shown; i += 1) lines[top + i] = (i === 0 ? marker : "  ") + colourTags(rows[first + i]);
+  return { row: top + caret.row - first, col: 2 + caret.col };
+}
+
+function writeHints() {
+  if (state.notice) return style.warn(state.notice);
+  if (suggestions().length) return keys([["tab", "complete label"], ["⏎", "save"], ["esc", state.editing ? "cancel" : "close"]]);
+  if (state.editing) return keys([["⏎", "save"], ["\\⏎", "new line"], ["esc", "cancel"]]);
+  return keys([["⏎", "save"], ["\\⏎", "new line"], ["tab", `notes ${state.counts[state.tab] ?? 0}`], ["esc", "close"]]);
+}
+
+function writeBody(width, rows) {
+  const lines = new Array(rows).fill("");
+  lines[0] = writeHeader(width);
+  const caret = noteBox(lines, 2, width, rows - 6);
+  const found = suggestions();
+  if (found.length) lines[rows - 3] = `  ${tags(found)}  ${style.dim("tab completes")}`;
+  lines[rows - 2] = style.dim("─".repeat(width));
+  lines[rows - 1] = writeHints();
+  return { lines, caret };
+}
+
+/* ---------- the notes ---------- */
 
 function tabRow(width) {
   const row = TABS.map((tab, i) => {
     const text = `${tab.label} ${state.counts[i] ?? 0}`;
     return i === state.tab ? style.selected(` ${text} `) : ` ${style.dim(text)} `;
   }).join(" ");
-  return spread(row, style.dim("tab ⇄"), width);
-}
-
-function inputBlock(lines, top, width) {
-  const focused = state.focus === "input";
-  const marker = state.editing ? style.accent("✎ ") : style.accent("› ");
-  if (state.editor.text === "") {
-    lines[top] = `${marker}${style.dim(state.editing ? "" : "write a note… add #labels to group it")}`;
-    return { used: 1, caret: focused ? { row: top, col: 2 } : null };
-  }
-  const { rows, caret } = state.editor.layout(width - 2);
-  const shown = Math.min(MAX_INPUT_ROWS, rows.length);
-  const first = Math.max(0, Math.min(caret.row - shown + 1, rows.length - shown));
-  for (let i = 0; i < shown; i += 1) {
-    const text = colourTags(rows[first + i]);
-    lines[top + i] = (i === 0 ? marker : "  ") + (focused ? text : style.dim(text));
-  }
-  return { used: shown, caret: focused ? { row: top + caret.row - first, col: 2 + caret.col } : null };
-}
-
-// Under the box: label completions while one is being typed, otherwise where
-// the note will be saved.
-function inputInfo(width) {
-  const found = suggestions();
-  if (found.length) return `  ${tags(found)}  ${style.dim("tab completes")}`;
-  if (state.editing) return style.dim(`  editing ${state.editing}`);
-  const where = state.anywhere ? "anywhere" : shortenPath(here.folder, width - 40);
-  const toggle = here.folder ? style.dim(` · ctrl+g ${state.anywhere ? "this folder" : "anywhere"}`) : "";
-  return `  ${style.dim("saves to")} ${style.accent(where)}${toggle}`;
+  return spread(row, style.dim("← →"), width);
 }
 
 // The left column: label headings with their notes underneath.
@@ -211,11 +221,11 @@ function listLines(width) {
     for (const note of g.notes) {
       const selected = note === current();
       if (selected) selectedRow = rows.length;
-      const marker = selected ? (state.focus === "list" ? style.accent("›") : style.dim("›")) : " ";
+      const marker = selected ? style.accent("›") : " ";
       const tick = state.ticked.has(note.id) ? style.accent("●") : " ";
       const date = g.upcoming ? when.short(note.due) : "";
       const text = truncate(title(note.text), width - 3 - (date ? date.length + 1 : 0));
-      const head = `${marker}${tick} ${selected && state.focus === "list" ? style.bright(text) : text}`;
+      const head = `${marker}${tick} ${selected ? style.bright(text) : text}`;
       rows.push(date ? spread(head, dueText(note.due, date), width) : head);
     }
   }
@@ -244,47 +254,41 @@ function emptyLines() {
   return [
     style.dim("No notes here yet."),
     "",
-    style.dim("Write one above and press ⏎."),
+    style.dim("tab goes back to write one."),
     style.dim("Add #labels to group notes, e.g. #release."),
-    ...(TABS[state.tab].id === "here" ? ["", style.dim("tab shows notes from every folder.")] : []),
+    ...(TABS[state.tab].id === "here" ? ["", style.dim("→ shows notes from every folder.")] : []),
   ];
 }
 
-function hintRow() {
+function notesHints() {
   if (state.notice) return style.warn(state.notice);
   if (state.confirmDelete) return style.warn(`ctrl+d again deletes ${plural(targets().length, "note")} · any other key keeps them`);
-  if (state.focus === "input") {
-    if (suggestions().length) return keys([["tab", "complete label"], ["⏎", "save"], ["esc", "close"]]);
-    if (state.editing) return keys([["⏎", "save"], ["\\⏎", "new line"], ["esc", "cancel"]]);
-    return keys([["⏎", "save"], ["\\⏎", "new line"], state.notes.length && ["↓", "notes"], ["esc", "close"]]);
-  }
-  const src = current()?.source ?? {};
+  if (!current()) return keys([["tab", "write"], ["← →", "folders"], ["esc", "close"]]);
+  const src = current().source ?? {};
   return keys([
+    ["tab", "write"],
     ["⏎", "edit"],
     ["space", "tick"],
-    ["ctrl+n", "to an agent"],
+    ["ctrl+n", "agent"],
     ["ctrl+w", "when"],
-    ["ctrl+x", current()?.done ? "reopen" : "done"],
+    ["ctrl+x", current().done ? "reopen" : "done"],
     ["ctrl+d", "delete"],
     src.session && RESUME_ARGS[src.agent] && ["ctrl+o", "session"],
   ]);
 }
 
-function mainBody(width, rows) {
+function notesBody(width, rows) {
   const lines = new Array(rows).fill("");
   lines[0] = tabRow(width);
-  const input = inputBlock(lines, 2, width);
-  lines[2 + input.used] = inputInfo(width);
-
-  const top = 2 + input.used + 2;
-  const height = rows - top - 2;
-  lines[top - 1] = style.dim("─".repeat(width));
+  lines[1] = style.dim("─".repeat(width));
   lines[rows - 2] = style.dim("─".repeat(width));
-  lines[rows - 1] = hintRow();
+  lines[rows - 1] = notesHints();
+  const top = 2;
+  const height = rows - top - 2;
 
   if (!state.notes.length) {
-    emptyLines().forEach((line, i) => { if (i < height) lines[top + i] = `  ${line}`; });
-    return { lines, caret: input.caret };
+    emptyLines().forEach((line, i) => { if (i + 1 < height) lines[top + 1 + i] = `  ${line}`; });
+    return { lines, caret: null };
   }
 
   const leftWidth = Math.max(26, Math.min(44, Math.round(width * 0.4)));
@@ -298,7 +302,7 @@ function mainBody(width, rows) {
     const left = pad(truncate(list.rows[first + i] ?? "", leftWidth), leftWidth);
     lines[top + i] = `${left} ${style.dim("│")} ${preview[i] ?? ""}`;
   }
-  return { lines, caret: input.caret };
+  return { lines, caret: null };
 }
 
 /* ---------- set a date ---------- */
@@ -354,14 +358,17 @@ function onWhenKey(chunk, key) {
   state.notice = due ? `due ${when.short(due)}: ${plural(notes.length, "note")}` : `date cleared: ${plural(notes.length, "note")}`;
 }
 
-/* ---------- keys on the main screen ---------- */
+/* ---------- keys ---------- */
 
-function onInputKey(chunk, key) {
+function onWriteKey(chunk, key) {
   if (key.name === "tab" && !key.shift && suggestions().length) {
     state.editor.insert(`${suggestions()[0].slice(typedTag().length)} `);
     return;
   }
-  if (key.name === "tab") return switchTab(key.shift ? -1 : 1);
+  if (key.name === "tab") {
+    if (!state.editing) state.screen = "notes";
+    return;
+  }
   // Many terminals send shift+⏎ as a plain ⏎, so a backslash before ⏎ also
   // asks for a newline, as in Claude Code and Quick Prompt.
   if (key.name === "return" && !isNewline(chunk, key)) {
@@ -380,12 +387,7 @@ function onInputKey(chunk, key) {
     else state.notice = text === null ? "no clipboard tool found" : "clipboard is empty";
     return;
   }
-  if (key.name === "up") return state.editor.moveVertical(-1, ui.width() - 2);
-  if (key.name === "down") {
-    if (state.editor.moveVertical(1, ui.width() - 2) || !state.notes.length || state.editing) return;
-    state.focus = "list";
-    return;
-  }
+  if (key.name === "up" || key.name === "down") return state.editor.moveVertical(key.name === "up" ? -1 : 1, ui.width() - 2);
   editKey(state.editor, chunk, key);
 }
 
@@ -399,7 +401,7 @@ function save() {
       store.edit(state.editing, state.editor.text);
       state.notice = "saved";
       state.editing = null;
-      state.focus = "list";
+      state.screen = "notes";
       state.editor = new Editor(state.stash);
       reload();
     } else {
@@ -415,7 +417,7 @@ function save() {
   }
 }
 
-function onListKey(chunk, key) {
+function onNotesKey(chunk, key) {
   if (state.confirmDelete) {
     state.confirmDelete = false;
     if (key.ctrl && key.name === "d") {
@@ -427,13 +429,17 @@ function onListKey(chunk, key) {
     }
     return;
   }
+  // Typing anywhere writes a note.
+  if (key.name === "tab" || isPrintable(chunk, key)) {
+    state.screen = "write";
+    if (key.name !== "tab") state.editor.insert(chunk);
+    return;
+  }
+  if (key.name === "left" || key.name === "right") return switchTab(key.name === "left" ? -1 : 1);
+  if (!current()) return;
   switch (true) {
-    case key.name === "tab":
-      switchTab(key.shift ? -1 : 1);
-      break;
     case key.name === "up":
-      if (state.index === 0) state.focus = "input";
-      else state.index -= 1;
+      state.index = Math.max(0, state.index - 1);
       break;
     case key.name === "down":
       state.index = Math.min(state.notes.length - 1, state.index + 1);
@@ -447,7 +453,7 @@ function onListKey(chunk, key) {
       state.stash = state.editor.text;
       state.editing = current().id;
       state.editor = new Editor(current().text);
-      state.focus = "input";
+      state.screen = "write";
       break;
     case key.ctrl && key.name === "x":
       toggleDone(targets());
@@ -463,11 +469,6 @@ function onListKey(chunk, key) {
       break;
     case key.ctrl && key.name === "o":
       resume(current());
-      break;
-    // Typing anywhere writes a note.
-    case isPrintable(chunk, key):
-      state.focus = "input";
-      state.editor.insert(chunk);
       break;
     default:
       break;
@@ -539,8 +540,8 @@ const SHEETS = {
 function onKey(chunk, key) {
   state.notice = null;
   if (state.sheet) return SHEETS[state.sheet.type].key(chunk, key);
-  if (state.focus === "list") return onListKey(chunk, key);
-  return onInputKey(chunk, key);
+  if (state.screen === "notes") return onNotesKey(chunk, key);
+  return onWriteKey(chunk, key);
 }
 
 // Out of whatever you are in, one step at a time. Closing keeps an unsaved
@@ -553,9 +554,7 @@ function onEscape() {
   } else if (state.editing) {
     state.editing = null;
     state.editor = new Editor(state.stash);
-    state.focus = "list";
-  } else if (state.focus === "list") {
-    state.focus = "input";
+    state.screen = "notes";
   } else {
     writeFile(DRAFT, state.editor.text.trim() ? state.editor.text : "");
     ui.quit(0);
@@ -568,14 +567,17 @@ function onPaste(text) {
     return;
   }
   if (state.sheet) return;
-  state.focus = "input";
+  state.screen = "write";
   state.editor.insert(text);
 }
 
 reload();
 const ui = start({
   name: "popup",
-  body: (width, rows) => (state.sheet ? SHEETS[state.sheet.type].body(width, rows) : mainBody(width, rows)),
+  body: (width, rows) => {
+    if (state.sheet) return SHEETS[state.sheet.type].body(width, rows);
+    return state.screen === "notes" ? notesBody(width, rows) : writeBody(width, rows);
+  },
   onKey,
   onPaste,
   onEscape,
