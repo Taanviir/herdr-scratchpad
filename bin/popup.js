@@ -15,6 +15,7 @@ const { labels, title, known, group, partialTag } = require("../lib/labels");
 const when = require("../lib/when");
 const { run, spawnDetached } = require("../lib/herdr");
 const { readClipboard } = require("../lib/clipboard");
+const { sanitizePasted } = require("../lib/text");
 const { relink } = require("../lib/link");
 const { STATE_DIR, start, isNewline, isPrintable, editKey } = require("../lib/term");
 
@@ -68,6 +69,19 @@ const state = {
   confirmDelete: false,
   notice: draft ? "restored your draft · ctrl+u clears it" : selection ? "started from your selection" : null,
 };
+
+// The notes file is shared with agents, so a note can vanish or the file be
+// locked while the popup is open. That is a notice, not a crash.
+function attempt(change) {
+  try {
+    change();
+    return true;
+  } catch (error) {
+    state.notice = error.message;
+    reload();
+    return false;
+  }
+}
 
 function reload() {
   const all = store.readAll().sort((a, b) => b.created.localeCompare(a.created));
@@ -360,7 +374,7 @@ function onWhenKey(chunk, key) {
   }
   const notes = targets();
   const due = date ? date.toISOString() : null;
-  for (const note of notes) store.setDue(note.id, due);
+  if (!attempt(() => notes.forEach((note) => store.setDue(note.id, due)))) return;
   state.sheet = null;
   state.ticked.clear();
   reload();
@@ -393,7 +407,7 @@ function onWriteKey(chunk, key) {
   }
   if (key.ctrl && key.name === "v") {
     const text = readClipboard();
-    if (text) state.editor.insert(text);
+    if (text) state.editor.insert(sanitizePasted(text));
     else state.notice = text === null ? "no clipboard tool found" : "clipboard is empty";
     return;
   }
@@ -432,15 +446,15 @@ function onNotesKey(chunk, key) {
     state.confirmDelete = false;
     if (key.ctrl && key.name === "d") {
       const notes = targets();
-      for (const note of notes) store.remove(note.id);
+      if (!attempt(() => notes.forEach((note) => store.remove(note.id)))) return;
       state.ticked.clear();
       state.notice = `deleted ${plural(notes.length, "note")}`;
       reload();
     }
     return;
   }
-  // Typing anywhere writes a note.
-  if (key.name === "tab" || isPrintable(chunk, key)) {
+  // Typing anywhere writes a note, except space, which ticks one.
+  if (key.name === "tab" || (isPrintable(chunk, key) && chunk !== " ")) {
     state.screen = "write";
     if (key.name !== "tab") state.editor.insert(chunk);
     return;
@@ -494,7 +508,7 @@ function switchTab(step) {
 
 function toggleDone(notes) {
   const finish = notes.some((n) => !n.done);
-  for (const note of notes) store.setDone(note.id, finish);
+  if (!attempt(() => notes.forEach((note) => store.setDone(note.id, finish)))) return;
   state.ticked.clear();
   state.notice = `${finish ? "done" : "reopened"}: ${plural(notes.length, "note")}`;
   reload();
@@ -566,9 +580,14 @@ function onEscape() {
     state.editor = new Editor(state.stash);
     state.screen = "notes";
   } else {
-    writeFile(DRAFT, state.editor.text.trim() ? state.editor.text : "");
-    ui.quit(0);
+    close();
   }
+}
+
+function close() {
+  const unsaved = state.editing ? state.stash : state.editor.text;
+  writeFile(DRAFT, unsaved.trim() ? unsaved : "");
+  ui.quit(0);
 }
 
 function onPaste(text) {
@@ -592,4 +611,5 @@ const ui = start({
   onKey,
   onPaste,
   onEscape,
+  onInterrupt: close,
 });
