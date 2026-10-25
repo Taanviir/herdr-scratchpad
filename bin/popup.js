@@ -616,3 +616,18 @@ const ui = start({
   onEscape,
   onInterrupt: close,
 });
+
+// Agents add and tick notes with `scratch` while the popup is open. Every write
+// replaces the file, which fs.watch loses track of, so this checks its mtime.
+fs.watchFile(store.file(), { interval: 300 }, (now, before) => {
+  if (now.mtimeMs === before.mtimeMs) return;
+  const id = current()?.id;
+  try {
+    reload();
+  } catch (error) {
+    state.notice = error.message;
+  }
+  const at = state.notes.findIndex((n) => n.id === id);
+  if (at >= 0) state.index = at;
+  ui.scheduleRender();
+}).unref();
