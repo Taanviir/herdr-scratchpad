@@ -4,7 +4,7 @@
 // with notes as its prompt, or reopen the agent session a note came from.
 
 const fs = require("node:fs");
-const { run, notify, HerdrError } = require("../lib/herdr");
+const { run, notify, HerdrError } = require("../lib/shared/herdr");
 
 // The Scratchpad popup has to be gone before Herdr will open another, and
 // Herdr says ui_busy until it is.

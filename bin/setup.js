@@ -7,7 +7,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
-const { run, notify, BIN } = require("../lib/herdr");
+const { run, notify, BIN } = require("../lib/shared/herdr");
 const { link } = require("../lib/link");
 
 const PLUGIN_ID = "taanviir.scratchpad";

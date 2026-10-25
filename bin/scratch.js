@@ -7,7 +7,7 @@
 const fs = require("node:fs");
 const store = require("../lib/store");
 const { describe, folderFor, relatedTo } = require("../lib/source");
-const { shortenPath } = require("../lib/ui");
+const { shortenPath } = require("../lib/shared/ui");
 const { labels } = require("../lib/labels");
 const when = require("../lib/when");
 
