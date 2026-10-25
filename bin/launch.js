@@ -11,7 +11,9 @@ const { run, notify, HerdrError } = require("../lib/herdr");
 const HANDOFF_ATTEMPTS = 20;
 const HANDOFF_RETRY_MS = 50;
 const START_ATTEMPTS = 12;
-const START_RETRY_MS = 400;
+// A new tab's shell is usually up within a few hundred milliseconds, so the
+// first retries come quickly and only later ones wait the full 400ms.
+const startRetryMs = (attempt) => Math.min(400, 50 * 2 ** attempt);
 const START_TIMEOUT_MS = 15000;
 
 function sleep(ms) {
@@ -60,7 +62,7 @@ function resume({ kind, args, cwd, workspace }) {
     if (res.ok || res.code === "timeout" || /agent_not_ready/i.test(`${res.code ?? ""} ${res.message}`)) return;
     last = res.message;
     if (!/pane|shell|prompt|busy|not_available/i.test(`${res.code ?? ""} ${last}`)) break;
-    sleep(START_RETRY_MS);
+    sleep(startRetryMs(attempt));
   }
   if (result.tab?.tab_id) run(["tab", "close", result.tab.tab_id], { check: false });
   throw new HerdrError(last);
