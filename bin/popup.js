@@ -14,7 +14,7 @@ const { compose } = require("../lib/brief");
 const { labels, title, known, group, partialTag } = require("../lib/labels");
 const when = require("../lib/when");
 const { run, spawnDetached } = require("../lib/shared/herdr");
-const { readClipboard } = require("../lib/clipboard");
+const { readClipboard } = require("../lib/shared/clipboard");
 const { sanitizePasted } = require("../lib/shared/text");
 const { relink } = require("../lib/link");
 const { STATE_DIR, start, isNewline, isPrintable, editKey } = require("../lib/term");
@@ -405,14 +405,17 @@ function onWriteKey(chunk, key) {
     state.anywhere = !state.anywhere;
     return;
   }
-  if (key.ctrl && key.name === "v") {
-    const text = readClipboard();
-    if (text) state.editor.insert(sanitizePasted(text));
-    else state.notice = text === null ? "no clipboard tool found" : "clipboard is empty";
-    return;
-  }
+  if (key.ctrl && key.name === "v") return paste();
   if (key.name === "up" || key.name === "down") return state.editor.moveVertical(key.name === "up" ? -1 : 1, ui.width() - 2);
   editKey(state.editor, chunk, key);
+}
+
+// Reading the clipboard is slow on WSL, so keys keep coming in meanwhile.
+async function paste() {
+  const text = await readClipboard();
+  if (text) state.editor.insert(sanitizePasted(text));
+  else state.notice = text === null ? "no clipboard tool found" : "clipboard is empty";
+  ui.scheduleRender();
 }
 
 function save() {
