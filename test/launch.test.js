@@ -6,7 +6,7 @@ const assert = require("node:assert");
 // The worker with Herdr answering each call from `replies`, in order.
 function worker(replies) {
   const calls = [];
-  const herdr = require.resolve("../lib/herdr");
+  const herdr = require.resolve("../lib/shared/herdr");
   const real = require(herdr);
   require.cache[herdr].exports = {
     ...real,
