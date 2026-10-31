@@ -126,6 +126,23 @@ add something like this to your `AGENTS.md` or `CLAUDE.md`:
 - When you finish a note you were given, `scratch done <id>`.
 ```
 
+## On the sidebar
+
+Scratchpad puts each project's open notes and its soonest date on Herdr's
+sidebar, as the `$notes` and `$due` tokens. It updates them when Herdr starts,
+when a workspace or pane opens, and after every change to the notes. Show them
+by naming them in your `config.toml`:
+
+```toml
+[ui.sidebar.spaces]
+rows = [
+  ["state_icon", "workspace", { token = "$notes", fg = "#56c8d8" }],
+  ["branch", "git_status", { token = "$due", fg = "#e8b04b", rules = [{ contains = "overdue", fg = "#ef6b6b", bold = true }] }],
+]
+```
+
+A workspace counts the notes of every folder it has a pane in.
+
 ## Files
 
 | Path | |
