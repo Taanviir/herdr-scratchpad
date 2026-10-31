@@ -7,6 +7,8 @@ const os = require("node:os");
 const path = require("node:path");
 
 process.env.SCRATCHPAD_HOME = fs.mkdtempSync(path.join(os.tmpdir(), "scratchpad-"));
+// Run from a Herdr pane, every write would put these notes on the real sidebar.
+delete process.env.HERDR_ENV;
 const store = require("../lib/store");
 const { relatedTo } = require("../lib/source");
 
