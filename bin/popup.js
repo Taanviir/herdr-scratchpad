@@ -149,6 +149,22 @@ function keys(pairs, width = Infinity) {
   return shown.join("  ");
 }
 
+// The same pairs over as many lines as they need.
+function keyLines(pairs, width) {
+  const lines = [[]];
+  let used = 0;
+  for (const [key, label] of pairs.filter(Boolean)) {
+    const size = displayWidth(`${key} ${label}`);
+    if (lines.at(-1).length && used + 2 + size > width) {
+      lines.push([]);
+      used = 0;
+    }
+    used += (lines.at(-1).length ? 2 : 0) + size;
+    lines.at(-1).push(`${style.bright(key)} ${style.dim(label)}`);
+  }
+  return lines.map((line) => line.join("  "));
+}
+
 function spread(left, right, width) {
   return left + " ".repeat(Math.max(1, width - displayWidth(left) - displayWidth(right))) + right;
 }
@@ -286,11 +302,11 @@ function emptyLines() {
 }
 
 function notesHints(width) {
-  if (state.notice) return style.warn(state.notice);
-  if (state.confirmDelete) return style.warn(`ctrl+d again deletes ${plural(targets().length, "note")} · any other key keeps them`);
-  if (!current()) return keys([["tab", "write"], ["← →", "view"], ["esc", "close"]]);
+  if (state.notice) return [style.warn(state.notice)];
+  if (state.confirmDelete) return [style.warn(`ctrl+d again deletes ${plural(targets().length, "note")} · any other key keeps them`)];
+  if (!current()) return [keys([["tab", "write"], ["← →", "view"], ["esc", "close"]])];
   const src = current().source ?? {};
-  return keys([
+  return keyLines([
     ["tab", "write"],
     ["← →", "view"],
     ["⏎", "edit"],
@@ -307,10 +323,11 @@ function notesBody(width, rows) {
   const lines = new Array(rows).fill("");
   lines[0] = tabRow(width);
   lines[1] = style.dim("─".repeat(width));
-  lines[rows - 2] = style.dim("─".repeat(width));
-  lines[rows - 1] = notesHints(width);
+  const hints = notesHints(width);
+  hints.forEach((line, i) => { lines[rows - hints.length + i] = line; });
+  lines[rows - hints.length - 1] = style.dim("─".repeat(width));
   const top = 2;
-  const height = rows - top - 2;
+  const height = rows - top - hints.length - 1;
 
   if (!state.notes.length) {
     emptyLines().forEach((line, i) => { if (i + 1 < height) lines[top + 1 + i] = `  ${line}`; });
