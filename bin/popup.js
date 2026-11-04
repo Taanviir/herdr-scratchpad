@@ -17,7 +17,7 @@ const { run, spawnDetached } = require("../lib/shared/herdr");
 const { readClipboard } = require("../lib/shared/clipboard");
 const { sanitizePasted } = require("../lib/shared/text");
 const { relink } = require("../lib/link");
-const { STATE_DIR, start, isNewline, isPrintable, editKey } = require("../lib/term");
+const { STATE_DIR, start, isNewline, isPrintable, editKey } = require("../lib/shared/term");
 
 const LAUNCHER = path.join(__dirname, "launch.js");
 const DRAFT = path.join(STATE_DIR, "draft.txt");
@@ -606,6 +606,7 @@ function onPaste(text) {
 reload();
 relink();
 const ui = start({
+  title: "Scratchpad",
   name: "popup",
   body: (width, rows) => {
     if (state.sheet) return SHEETS[state.sheet.type].body(width, rows);
