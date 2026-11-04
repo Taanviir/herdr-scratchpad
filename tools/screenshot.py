@@ -119,7 +119,8 @@ def capture(keys, env):
     except ProcessLookupError:
         pass
 
-    screen = buf.decode("utf8", "replace").split("\x1b[2J\x1b[H")[-1]
+    # Every frame starts by sending the cursor home and repaints every row.
+    screen = buf.decode("utf8", "replace").split("\x1b[H")[-1]
     cursor = None
     shown = re.findall(r"\x1b\[(\d+);(\d+)H\x1b\[\?25h", screen)
     if shown:
