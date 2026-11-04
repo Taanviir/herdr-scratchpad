@@ -10,6 +10,7 @@ const store = require("../lib/store");
 const { describe, relatedTo } = require("../lib/source");
 const { Editor } = require("../lib/shared/editor");
 const { style, tint, pad, truncate, shortenPath, displayWidth } = require("../lib/shared/ui");
+const { strip, switchFor, switchTo } = require("../lib/shared/tabs");
 const { compose } = require("../lib/brief");
 const { labels, title, known, group, partialTag } = require("../lib/labels");
 const when = require("../lib/when");
@@ -566,6 +567,12 @@ const SHEETS = {
 
 function onKey(chunk, key) {
   state.notice = null;
+  // Another tab of the strip: an unsaved note is kept, as on esc.
+  const tab = switchFor(key, "notes");
+  if (tab && tab.id !== "notes") {
+    switchTo(tab, { cwd: here.folder ?? process.env.SCRATCHPAD_CWD, workspace, pane: originPane });
+    return close();
+  }
   if (state.sheet) return SHEETS[state.sheet.type].key(chunk, key);
   if (state.screen === "notes") return onNotesKey(chunk, key);
   return onWriteKey(chunk, key);
@@ -608,9 +615,11 @@ relink();
 const ui = start({
   title: "Scratchpad",
   name: "popup",
+  // The strip takes the top row; the screen below gets the rest.
   body: (width, rows) => {
-    if (state.sheet) return SHEETS[state.sheet.type].body(width, rows);
-    return state.screen === "notes" ? notesBody(width, rows) : writeBody(width, rows);
+    const screen = state.sheet ? SHEETS[state.sheet.type].body : state.screen === "notes" ? notesBody : writeBody;
+    const { lines, caret } = screen(width, rows - 1);
+    return { lines: [strip("notes", width), ...lines], caret: caret && { ...caret, row: caret.row + 1 } };
   },
   onKey,
   onPaste,

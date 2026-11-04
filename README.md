@@ -74,6 +74,7 @@ the field shows how it was read before you press ⏎:
 | `ctrl+v` | paste from the system clipboard |
 | `tab` | complete a label, or turn to the notes |
 | `esc` | close, keeping what you typed |
+| `alt+←` `alt+→` | switch to Prompt, Notes or Projects, keeping the folder |
 
 **In the notes**
 
