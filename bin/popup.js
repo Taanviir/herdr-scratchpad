@@ -569,10 +569,7 @@ function onKey(chunk, key) {
   state.notice = null;
   // Another tab of the strip: an unsaved note is kept, as on esc.
   const tab = switchFor(key, "notes");
-  if (tab && tab.id !== "notes") {
-    switchTo(tab, { cwd: here.folder ?? process.env.SCRATCHPAD_CWD, workspace, pane: originPane });
-    return close();
-  }
+  if (tab && tab.id !== "notes") return switchTo(tab, { cwd: here.folder ?? process.env.SCRATCHPAD_CWD, workspace, pane: originPane }, keepDraft);
   if (state.sheet) return SHEETS[state.sheet.type].key(chunk, key);
   if (state.screen === "notes") return onNotesKey(chunk, key);
   return onWriteKey(chunk, key);
@@ -594,9 +591,13 @@ function onEscape() {
   }
 }
 
-function close() {
+function keepDraft() {
   const unsaved = state.editing ? state.stash : state.editor.text;
   writeFile(DRAFT, unsaved.trim() ? unsaved : "");
+}
+
+function close() {
+  keepDraft();
   ui.quit(0);
 }
 
