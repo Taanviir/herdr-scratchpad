@@ -232,7 +232,7 @@ function tabRow(width) {
     const text = `${tab.label} ${state.counts[i] ?? 0}`;
     return i === state.tab ? style.selected(` ${text} `) : ` ${style.dim(text)} `;
   }).join(" ");
-  return spread(row, style.dim("← →"), width);
+  return row;
 }
 
 // The left column: label headings with their notes underneath.
@@ -288,10 +288,11 @@ function emptyLines() {
 function notesHints(width) {
   if (state.notice) return style.warn(state.notice);
   if (state.confirmDelete) return style.warn(`ctrl+d again deletes ${plural(targets().length, "note")} · any other key keeps them`);
-  if (!current()) return keys([["tab", "write"], ["← →", "folders"], ["esc", "close"]]);
+  if (!current()) return keys([["tab", "write"], ["← →", "view"], ["esc", "close"]]);
   const src = current().source ?? {};
   return keys([
     ["tab", "write"],
+    ["← →", "view"],
     ["⏎", "edit"],
     ["ctrl+n", "agent"],
     src.session && RESUME_ARGS[src.agent] && ["ctrl+o", "session"],
