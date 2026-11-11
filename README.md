@@ -72,6 +72,7 @@ the field shows how it was read before you press ⏎:
 | `\` `⏎`, `shift+⏎`, `alt+⏎`, `ctrl+j` | new line; many terminals send `shift+⏎` as a plain `⏎`, so a backslash before `⏎` works everywhere |
 | `ctrl+g` | save under no folder instead, or back |
 | `ctrl+v` | paste from the system clipboard |
+| `ctrl+y` | copy the note to the system clipboard |
 | `tab` | complete a label, or turn to the notes |
 | `esc` | close, keeping what you typed |
 | `alt+←` `alt+→` | switch to Prompt, Notes or Projects, keeping the folder |
@@ -86,6 +87,7 @@ the field shows how it was read before you press ⏎:
 | `space` | tick a note; actions apply to the ticked notes, or the one under the cursor |
 | `ctrl+n` | hand the notes to an agent, through Quick Prompt |
 | `ctrl+w` | set or clear the date the notes are due |
+| `ctrl+y` | copy the notes' full text to the system clipboard |
 | `ctrl+x` | mark done, or reopen |
 | `ctrl+d` twice | delete |
 | `ctrl+o` | reopen the Claude Code or Codex session the note came from |

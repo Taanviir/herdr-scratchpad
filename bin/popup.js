@@ -15,7 +15,7 @@ const { compose } = require("../lib/brief");
 const { labels, title, known, group, partialTag } = require("../lib/labels");
 const when = require("../lib/when");
 const { run, spawnDetached } = require("../lib/shared/herdr");
-const { readClipboard } = require("../lib/shared/clipboard");
+const { readClipboard, writeClipboard } = require("../lib/shared/clipboard");
 const { sanitizePasted } = require("../lib/shared/text");
 const { relink } = require("../lib/link");
 const { STATE_DIR, start, isNewline, isPrintable, editKey } = require("../lib/shared/term");
@@ -314,6 +314,7 @@ function notesHints(width) {
     src.session && RESUME_ARGS[src.agent] && ["ctrl+o", "session"],
     ["ctrl+x", current().done ? "reopen" : "done"],
     ["ctrl+w", "when"],
+    ["ctrl+y", "copy"],
     ["ctrl+d", "delete"],
     ["space", "tick"],
   ], width);
@@ -425,11 +426,21 @@ function onWriteKey(chunk, key) {
     return;
   }
   if (key.ctrl && key.name === "v") return paste();
+  if (key.ctrl && key.name === "y") return copy(state.editor.text, "the note");
   if (key.name === "up" || key.name === "down") return state.editor.moveVertical(key.name === "up" ? -1 : 1, ui.width() - 2);
   editKey(state.editor, chunk, key);
 }
 
-// Reading the clipboard is slow on WSL, so keys keep coming in meanwhile.
+// The clipboard is slow on WSL, so keys keep coming in meanwhile.
+async function copy(text, what) {
+  if (!text.trim()) {
+    state.notice = "nothing to copy";
+    return;
+  }
+  state.notice = (await writeClipboard(text)) ? `copied ${what}` : "no clipboard tool found";
+  ui.scheduleRender();
+}
+
 async function paste() {
   const text = await readClipboard();
   if (text) state.editor.insert(sanitizePasted(text));
@@ -516,6 +527,11 @@ function onNotesKey(chunk, key) {
     case key.ctrl && key.name === "o":
       resume(current());
       break;
+    case key.ctrl && key.name === "y": {
+      const notes = targets();
+      copy(notes.map((n) => n.text).join("\n\n"), notes.length === 1 ? "the note" : plural(notes.length, "note"));
+      break;
+    }
     default:
       break;
   }
